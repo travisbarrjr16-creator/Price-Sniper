@@ -17,7 +17,7 @@ foreach ($cand in @(@("py", "-3"), @("python"))) {
         $extra = @($cand | Select-Object -Skip 1)
         $ok = & $cand[0] @extra -c "import sys; print(sys.version_info >= (3, 10))" 2>$null
         if ($ok -eq "True") { $py = $cand; break }
-    } catch {}
+    } catch { Write-Verbose "Python not available as '$($cand -join ' ')', trying the next option" }
 }
 if (-not $py) {
     Write-Host "Python 3.10 or newer is required. Install it from https://www.python.org/downloads/"
@@ -42,7 +42,7 @@ if ($ts) {
     try {
         $status = & $ts status --json | ConvertFrom-Json
         if ($status.Self.DNSName) { $tsUrl = "https://" + $status.Self.DNSName.TrimEnd(".") }
-    } catch {}
+    } catch { Write-Verbose "Tailscale isn't signed in yet; skipping its address" }
 }
 
 if (-not (Test-Path .env)) {
