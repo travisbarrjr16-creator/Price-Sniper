@@ -741,6 +741,7 @@ async function updateBell() {
     const unread = (await api(`/api/alerts?since_id=${alertsSeen.get()}`)).length;
     $("#bellCount").hidden = !unread; $("#bellCount").textContent = unread > 49 ? "50+" : unread;
     $("#bellBtn").setAttribute("aria-label", unread ? `Recent alerts, ${unread} new` : "Recent alerts");
+    document.title = (unread ? `(${unread > 49 ? "50+" : unread}) ` : "") + "Price Sniper";   // shows on the browser tab
   } catch {}
 }
 $("#bellBtn").onclick = async () => {
@@ -820,6 +821,7 @@ $("#logoutBtn").onclick = async () => {
   state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: "", showMine: false, showHidden: false};
   $("#main").innerHTML = EMPTY_MAIN; $("#watches").innerHTML = '<div class="empty">Nothing yet.</div>';
   setAuthMode(false);        // come back to "Sign in", not "Create account"
+  document.title = "Price Sniper";
   endEdit();
   showAuth();
 };
