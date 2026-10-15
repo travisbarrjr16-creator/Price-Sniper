@@ -322,6 +322,9 @@ def test_quiet_hours(tmp_path, monkeypatch):
     u = User(id=1, email="x", quiet_start="23:00", quiet_end="07:00", quiet_tz="America/Chicago")
     assert u.in_quiet_hours(datetime(2026, 1, 1, 6, 0, tzinfo=timezone.utc))      # midnight in Chicago
     assert not u.in_quiet_hours(datetime(2026, 1, 1, 18, 0, tzinfo=timezone.utc))  # noon in Chicago
+    # daylight saving: 04:30 UTC is 23:30 in July (quiet) but 22:30 in January (not)
+    assert u.in_quiet_hours(datetime(2026, 7, 1, 4, 30, tzinfo=timezone.utc))
+    assert not u.in_quiet_hours(datetime(2026, 1, 1, 4, 30, tzinfo=timezone.utc))
 
     c = _client(tmp_path, monkeypatch); _signup(c)
     assert c.put("/api/me/quiet", json={"start": "23:00"}).status_code == 422
