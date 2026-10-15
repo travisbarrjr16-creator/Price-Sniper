@@ -18,6 +18,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from . import budget, maintenance, scoring
@@ -237,6 +238,16 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         response.delete_cookie(COOKIE)
         return {"ok": True}
 
+    app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+    @app.get("/sw.js")
+    def service_worker():          # served from the root so it can cover the whole app
+        return FileResponse(STATIC / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/manifest.webmanifest")
+    def manifest():
+        return FileResponse(STATIC / "manifest.webmanifest", media_type="application/manifest+json")
+
     @app.get("/privacy")
     def privacy():
         return FileResponse(STATIC / "privacy.html")
@@ -361,6 +372,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
             rows = [r for r in db.get_listing_rows(w.id) if r["risk"] < scoring.RISK_HIDE_THRESHOLD or not w.hide_risky]
             best = min(rows, key=lambda r: r["total"], default=None)
             out.append({**w.to_dict(), "count": len(rows), "lowest": best["total"] if best else None,
+                        "latest_found": max((r["first_seen"] for r in rows), default=None),
                         "stats": watcher.last_stats.get(w.id)})
         return out
 

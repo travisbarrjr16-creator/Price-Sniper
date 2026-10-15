@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Price Sniper</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="theme-color" content="#2a78d6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sniper">
 <script>
   try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
 </script>
@@ -113,6 +120,18 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .auth-card h1 { font-size: 20px; margin: 0 0 4px; }
 .auth-card .sub { color: var(--text-2); margin: 0 0 12px; }
 .theme-btn { white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.badge.best { background: var(--good-bg); color: var(--good); }
+.badge.new { background: var(--accent); color: var(--accent-ink); letter-spacing: .03em; }
+.item .ph { display: grid; place-items: center; font-weight: 700; font-size: 15px; color: var(--text-2); letter-spacing: -.02em; }
+.item .found { font-size: 11px; color: var(--muted); }
+.watch .newdot { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 99px; background: var(--accent);
+  color: var(--accent-ink); font-size: 10px; font-weight: 700; vertical-align: 2px; }
+.welcome { text-align: left; }
+.welcome h2 { font-size: 18px; text-transform: none; letter-spacing: 0; color: var(--text); margin: 0 0 6px; }
+.welcome ol { margin: 8px 0 14px; padding-left: 20px; color: var(--text-2); line-height: 1.8; }
+.welcome .ex { display: flex; flex-wrap: wrap; gap: 6px; }
+.welcome .ex button { border-radius: 99px; }
 .badge.target { background: var(--good-bg); color: var(--good); outline: 2px solid var(--good); }
 .badge.cheapest { background: var(--neutral-bg); color: var(--text); }
 .quick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; font-size: 13px; }
@@ -121,7 +140,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
   color: var(--text); text-decoration: none; white-space: nowrap; }
 .quick a:hover { border-color: var(--accent); }
 .item .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-.item .acts button { font-size: 12px; padding: 3px 8px; }
+.item .acts button { font-size: 12px; padding: 4px 9px; min-height: 28px; }      /* WCAG 2.2 target size */
 .item.dismissed { opacity: .55; }
 .usage { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; font-size: 13px; }
 .usage .bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
@@ -130,7 +149,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .usage .sub { grid-column: 2; font-size: 12px; color: var(--muted); margin-top: -2px; }
 .mutelist { list-style: none; padding: 0; margin: 4px 0 0; max-height: 160px; overflow: auto; }
 .mutelist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-.mutelist button { font-size: 12px; padding: 2px 8px; }
+.mutelist button { font-size: 12px; padding: 3px 8px; min-height: 26px; }
 .auth-card .theme-btn { float: right; margin-top: -2px; }
 .linkbtn { background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; font: inherit; }
 .user { display: flex; gap: 8px; align-items: center; }
@@ -280,6 +299,23 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money = v => v == null ? "—" : "$" + Number(v).toFixed(2);
 const dollars = v => v == null ? "—" : "$" + Math.round(v);
+// "3 min ago", "2 h ago", "yesterday", "Oct 12"
+const ago = iso => {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  if (s < 172800) return "yesterday";
+  return new Date(iso).toLocaleDateString([], {month: "short", day: "numeric"});
+};
+// When you last looked at each watch, kept in this browser only ("NEW" = found since then)
+const lastSeen = {
+  get(id) { try { return localStorage.getItem("seen:" + id); } catch { return null; } },
+  set(id) { try { localStorage.setItem("seen:" + id, new Date().toISOString()); } catch {} },
+};
+const SITE_ABBR = {"eBay": "eB", "eBay Local": "eB", "Best Buy": "BB", "Walmart": "W", "Etsy": "Et", "Reverb": "Rv",
+  "r/buildapcsales": "r/", "r/hardwareswap": "r/", "Craigslist": "CL", "OfferUp": "OU", "Mercari": "Me", "FB Marketplace": "FB"};
 const COND = {new: "New", open_box: "Open box", refurbished: "Refurb", used: "Used", parts: "For parts"};
 const DEAL = {great: "Great deal", good: "Good price", fair: "Typical price", high: "Above typical", suspicious: "Too good to be true"};
 let state = {watches: [], sel: null, sort: "total", showHidden: false, showMine: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
@@ -330,7 +366,23 @@ $("#f").addEventListener("submit", async e => {
   btn.disabled = false; btn.textContent = "Start watching";
 });
 
-const EMPTY_MAIN = '<div class="card empty">Create a watch to start sniping. Results from every source land here, sorted by what you\'d actually pay.</div>';
+const EMPTY_MAIN = `<div class="card welcome">
+  <h2>👋 Start your first watch</h2>
+  <ol>
+    <li>Type the exact item. Include the model and size, like <b>DDR5 2x16 6400</b> instead of just "RAM".</li>
+    <li>Set your <b>max total</b> (price + shipping + tax) and an optional 🎯 target.</li>
+    <li>Add your ZIP and radius to include local pickup deals.</li>
+  </ol>
+  <div class="hint" style="margin-bottom:6px">Try one:</div>
+  <div class="ex">${["RTX 4060", "RTX 4070 Super", "DDR5 2x16 6400", "Ryzen 7 7800X3D", "2TB NVMe SN850X"]
+    .map(q => `<button type="button" data-example="${q}">${q}</button>`).join("")}</div>
+</div>`;
+document.addEventListener("click", e => {
+  const q = e.target.closest("[data-example]")?.dataset.example;
+  if (!q) return;
+  const f = $("#f"); f.query.value = q; f.max_price.focus();
+  f.scrollIntoView({behavior: "smooth", block: "start"});
+});
 
 async function refresh() {
   state.watches = await api("/api/watches");
@@ -346,7 +398,7 @@ function renderWatches() {
   if (!state.watches.length) { el.innerHTML = '<div class="empty">Nothing yet.</div>'; return; }
   el.innerHTML = state.watches.map(w => `
     <div class="watch ${w.id === state.sel ? "sel" : ""}" data-id="${w.id}">
-      <div class="q">${esc(w.query)}${w.active ? "" : " (paused)"}</div>
+      <div class="q">${esc(w.query)}${w.active ? "" : " (paused)"}${w.latest_found && w.id !== state.sel && (!lastSeen.get(w.id) || w.latest_found > lastSeen.get(w.id)) ? '<span class="newdot">NEW</span>' : ""}</div>
       <div class="meta">${w.count} listings · lowest ${money(w.lowest)}${w.max_price ? ` · max $${w.max_price}` : ""}</div>
     </div>`).join("");
   el.querySelectorAll(".watch").forEach(d => d.onclick = () => { state.sel = +d.dataset.id; state.site = ""; renderWatches(); renderMain(); });
@@ -360,6 +412,11 @@ async function renderMain() {
     api(`/api/watches/${w.id}/history`),
   ]);
   const items = res.items, siteCounts = res.sites;
+  // "NEW" = found since your previous visit to this watch (fixed for this page load, then remembered)
+  state.prevSeen = state.prevSeen || {};
+  if (!(w.id in state.prevSeen)) state.prevSeen[w.id] = lastSeen.get(w.id);
+  state.ctx = {prev: state.prevSeen[w.id], lowest: hist.lowest_seen};
+  lastSeen.set(w.id);
   if (state.site && !(state.site in siteCounts)) siteCounts[state.site] = 0;
   const visible = items.filter(i => !i.hidden && !i.dismissed && !i.muted);
   const best = visible.reduce((a, b) => (!a || b.total_cost < a.total_cost ? b : a), null);
@@ -371,7 +428,7 @@ async function renderMain() {
     <div class="card">
       <div class="toolbar" style="justify-content:space-between">
         <div><div style="font-size:18px;font-weight:650">${esc(w.query)}</div>
-          <div class="filtered">${w.last_checked_at ? "Checked " + new Date(w.last_checked_at).toLocaleTimeString() : "Not checked yet"} · every ${w.interval_minutes} min</div>
+          <div class="filtered">${w.last_checked_at ? `Checked <span title="${esc(new Date(w.last_checked_at).toLocaleString())}">${ago(w.last_checked_at)}</span>` : "Not checked yet"} · every ${w.interval_minutes} min</div>
           ${w.last_error ? `<div class="err">${esc(w.last_error)}</div>` : ""}</div>
         <div class="toolbar">
           <button id="chk">Check now</button>
@@ -480,6 +537,10 @@ function itemHTML(i) {
   const seller = i.seller_name ? `${esc(i.seller_name)}${i.seller_rating != null ? ` ${i.seller_rating}%` : ""}${i.seller_feedback_count != null ? ` (${i.seller_feedback_count})` : ""}` : "";
   const risk = i.risk_flags.map(f => `<span class="badge risk">⚠ ${esc(f)}</span>`).join("");
   const target = i.target_hit ? '<span class="badge target">🎯 Target hit</span>' : "";
+  const ctx = state.ctx || {};
+  const isNew = ctx.prev && i.first_seen > ctx.prev;
+  const lowestEver = !(i.hidden || i.dismissed || i.muted) && ctx.lowest != null && i.total_cost <= ctx.lowest + 0.005
+    ? '<span class="badge best" title="The lowest total this watch has ever seen">🏆 Lowest ever</span>' : "";
   const live = !(i.hidden || i.dismissed || i.muted);
   const rank = live ? (i.cheaper_now === 0 ? '<span class="badge cheapest">🥇 Cheapest right now</span>'
     : `<span class="badge cheapest">${i.cheaper_now} cheaper right now</span>`) : "";
@@ -490,13 +551,14 @@ function itemHTML(i) {
       ? `<button data-hide="listing" data-undo="1" data-value="${esc(i.key)}">Show again</button>`
       : `<button data-hide="listing" data-value="${esc(i.key)}" data-label="${esc(i.title.slice(0, 60))}" title="Hide this listing">✕ Not interested</button>`;
   return `<div class="item ${i.hidden ? "hidden" : ""} ${i.dismissed || i.muted ? "dismissed" : ""}">
-    ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : '<div class="ph"></div>'}
+    ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : `<div class="ph" aria-hidden="true">${esc(SITE_ABBR[i.source] || i.site.slice(0, 2))}</div>`}
     <div>
-      <div class="t">${esc(i.title)}</div>
+      <div class="t">${isNew ? '<span class="badge new">NEW</span> ' : ""}${esc(i.title)}</div>
       <div class="m"><span><b>${esc(i.source)}</b></span><span>${COND[i.condition] || i.condition}</span>
         ${i.local_pickup && i.distance_miles != null ? `<span>📍 ${i.distance_miles} mi${i.location ? " · " + esc(i.location) : ""}</span>` : ""}
         ${seller ? `<span>${seller}</span>` : ""}</div>
-      <div class="m" style="margin-top:4px">${target}${deal}${rank}${risk}</div>
+      <div class="m" style="margin-top:4px">${target}${lowestEver}${deal}${rank}${risk}</div>
+      <div class="found">found ${ago(i.first_seen)}${i.first_total && i.first_total - i.total_cost > 1 ? ` · was ${money(i.first_total)}` : ""}</div>
       <div class="acts">${dismissBtn}${muteBtn}</div>
     </div>
     <div class="price">
