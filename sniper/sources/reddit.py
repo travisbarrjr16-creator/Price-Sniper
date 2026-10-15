@@ -30,7 +30,7 @@ _STRIKE = re.compile(r"~~.*?~~", re.S)
 _SOLD = re.compile(r"\bpending\b"
                    r"|(?<!not )(?<!be )(?<!been )\b(sold|traded)\b(?! (as[- ]?is|separately|together|individually|as a)\b)"
                    r"|(?<!has )(?<!have )(?<!had )(?<!it )(?<!them )(?<!these )(?<!this )(?<!everything )\bgone\b"
-                   r"(?! (down|up|asap|soon|quick|quickly|fast|this|by|today)\b)", re.I)
+                   r"(?! (down|up|asap|soon|quick|quickly|fast|by)\b)", re.I)
 _HWS_TITLE = re.compile(r"^\s*\[(?P<loc>[A-Z]{2,3}(?:-[A-Z]{2})?)\]\s*\[H\](?P<have>.*?)\[W\](?P<want>.*)$", re.I)
 _TRADES = re.compile(r"trades?\s*:\s*(\d+)", re.I)
 _MONEY_WORDS = ("paypal", "cash", "venmo", "zelle", "money", "$")

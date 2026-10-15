@@ -48,7 +48,7 @@ _PART_KINDS = {
 }
 # Words that mean "this is a whole computer, or several things together".
 _CONTAINER_RE = re.compile(
-    r"\b(laptop|notebook|gaming pc|desktop|pre ?built|computer|tower pc|full (pc|build|system)|"
+    r"\b(laptop|notebook|gaming pc|desktop replacement|desktop|pre ?built|computer|tower pc|full (pc|build|system)|"
     r"complete (pc|build|system)|pc build|custom build|lot of \d+|\d+ ?(pcs|pieces|units)|lot|bundle|combo|"
     r"all in one|aio pc)\b")
 # Phrases that only describe the part, so they don't mean "a whole computer" or "comes with a CPU/GPU":
@@ -62,7 +62,7 @@ _DESCRIPTIVE_RE = re.compile(
     rf"|\b(?:for|in|fits|upgrade|compatible with|works with) (?:your |a |most |any )?{_PC}(?: (?:and |or )?{_PC})*\b"
     rf"|\b(?:pulled|removed|taken|came) (?:out )?(?:of|from) (?:an? |my |the |his )?(?:[a-z0-9]+ ){{0,2}}?(?:{_PC}|pre ?built)\b"
     rf"|\bused in (?:my |a |the )?(?:{_PC} ){{0,2}}(?:{_PC}|pre ?built|build)\b"   # "pulled from a Dell desktop"
-    r"|\b(?:pcs?|desktops?) (?:and|or) laptops?\b|\blaptops? (?:and|or) (?:pcs?|desktops?)\b"  # "PC & laptop", not "Laptop PC"
+    r"|(?<!gaming )\b(?:pcs?|desktops?) (?:and|or) laptops?\b|(?<!gaming )\blaptops? (?:and|or) (?:pcs?|desktops?)\b"  # "PC & laptop", not "Laptop PC"/"Gaming Laptop/PC"
     rf"|\b{_PC} (?:power )?(?:cables?|cords?|adapters?)\b"
     r"|\b(?:amd )?radeon(?: vega| rx vega)?(?: \d{1,4}(?: ?m)?)? graphics\b|\b(?:intel )?(?:uhd|iris xe|integrated) graphics\b"
     r"|\b(?:for|with|compatible with|optimized for|supports?) (?:amd |intel )*(?:ryzen|core|amd|intel|expo|xmp)\b"
@@ -193,8 +193,8 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
                         and not re.search(rf"(?<![a-z0-9]){tok}[\s-]+{nxt}(?![a-z0-9])", low)):
                     continue        # "iPhone 15 Pro, Max battery health": a comma between, not "Pro Max"
                 if (nxt == "plus" and i + 2 < len(title_tokens) and title_tokens[i + 2] in _PLUS_EXTRAS
-                        and (tok in GLUED_SUFFIXES or " + " in low)):
-                    continue        # "7600X Plus free cooler", "RTX 4060 + free game" (but "iPhone 15 Plus case" is a Plus)
+                        and (tok in GLUED_SUFFIXES or re.search(rf"(?<![a-z0-9]){tok}\s+\+", low))):
+                    continue        # "7600X Plus free cooler", "RTX 4060 + free game" (not "iPhone 15 Plus case", "S24+")
                 if nxt in VARIANT_SUFFIXES and nxt not in NON_VARIANT and nxt not in query_set:
                     return False, f"variant '{tok} {nxt}'"
 

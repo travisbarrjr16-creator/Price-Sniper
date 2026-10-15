@@ -894,3 +894,19 @@ def test_third_review_matching_cases():
         assert got == expected, (q, t)
     assert live_lines("RTX 3070 $280, need it gone") and live_lines("want these gone ASAP $50")
     assert live_lines("3070 - GONE") == []
+
+
+def test_fourth_review_matching_cases():
+    from sniper.matching import match
+    from sniper.sources.reddit import live_lines
+    cases = [("rtx 4060", "Gaming Laptop/PC RTX 4060 16GB", False),
+             ("rtx 4060", "Gaming Laptop & Desktop Replacement RTX 4060 16GB", False),
+             ("iphone 15", "iPhone 15 Plus + Free Case", False),
+             ("galaxy s24", "Galaxy S24+ 256GB", False),
+             ("rtx 4060", "RTX 4060 8GB + free game", True),
+             ("990 pro 2tb", "Samsung 990 PRO 2TB NVMe - PC & laptop", True)]
+    for q, t, expected in cases:
+        got = match(Listing(source="T", source_id="1", title=t, url="https://x", price=100, condition="new"),
+                    Watch(query=q))[0]
+        assert got == expected, (q, t)
+    assert live_lines("3070 $300 - Gone today, thanks") == []
