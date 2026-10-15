@@ -1,5 +1,7 @@
 import base64
 
+import pytest
+
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
@@ -105,3 +107,20 @@ def test_set_env_values_adds_and_replaces(tmp_path):
     env.write_text("A=1\nB=2")
     set_env_values({"B": "3", "C": "4"}, env)
     assert env.read_text() == "A=1\nB=3\nC=4\n"
+
+
+@pytest.mark.parametrize("body,price", [
+    ("MSI RTX 4060 Ventus - ~~$260~~ $230 shipped", 230.0),          # price drop: use the new price
+    ("MSI RTX 4060 Ventus - ~~$260~~ ~~$245~~ $230", 230.0),
+    ("~~MSI RTX 4060 Ventus - $230~~", None),                         # crossed out = sold
+    ("MSI RTX 4060 Ventus - $230 SOLD", None),
+    ("MSI RTX 4060 Ventus - $230 (pending)", None),
+    ("~~Ryzen 5 5600 - $90~~ SOLD\nMSI RTX 4060 Ventus - $230", 230.0),
+    ("MSI RTX 4060 Ventus - $1.2k or best offer", 1200.0),
+    ("MSI RTX 4060 Ventus - $1,050.00", 1050.0),
+])
+def test_hardwareswap_current_prices_only(body, price):
+    post = {"id": "z", "title": "[USA-TX][H] MSI RTX 4060 Ventus [W] PayPal", "selftext": body,
+            "permalink": "/x", "author": "a", "created_utc": 1}
+    got = parse_hws(post, "RTX 4060")
+    assert (got.price if got else None) == price

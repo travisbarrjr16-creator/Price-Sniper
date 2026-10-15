@@ -23,14 +23,33 @@ TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 API = "https://oauth.reddit.com"
 MAX_AGE_DAYS = 7
 
-_PRICE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?")
+_PRICE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?(\s?k\b)?", re.I)   # $230, $1,299.99, $1.2k
+_STRIKE = re.compile(r"~~.*?~~", re.S)
+_SOLD = re.compile(r"\b(sold|traded|gone|pending)\b", re.I)
 _HWS_TITLE = re.compile(r"^\s*\[(?P<loc>[A-Z]{2,3}(?:-[A-Z]{2})?)\]\s*\[H\](?P<have>.*?)\[W\](?P<want>.*)$", re.I)
 _TRADES = re.compile(r"trades?\s*:\s*(\d+)", re.I)
 _MONEY_WORDS = ("paypal", "cash", "venmo", "zelle", "money", "$")
 
 
 def _price(m: re.Match) -> float:
-    return float(m.group(1).replace(",", "") + "." + (m.group(2) or "00"))
+    value = float(m.group(1).replace(",", "") + "." + (m.group(2) or "00"))
+    return value * 1000 if m.group(3) else value
+
+
+def live_lines(body: str) -> list[str]:
+    """Body lines with what's no longer for sale removed.
+
+    Sellers edit posts instead of deleting them: crossed-out text (~~old~~) is an old price or a
+    sold item, and lines saying SOLD / traded / pending are gone. Only what's left is current.
+    """
+    out = []
+    for line in body.splitlines():
+        if _SOLD.search(line):
+            continue
+        line = _STRIKE.sub(" ", line)
+        if line.strip():
+            out.append(line)
+    return out
 
 
 def parse_bapcs(post: dict) -> Listing | None:
@@ -72,15 +91,16 @@ def parse_hws(post: dict, query: str) -> Listing | None:
     if missing_query_word(have, query) is not None:
         return None                                 # the item is only in [W], not [H]
     body = post.get("selftext", "") or ""
+    lines = live_lines(body)
     price = None
-    for line in body.splitlines():                  # first price on a line that mentions the item
+    for line in lines:                              # first current price on a line that mentions the item
         if missing_query_word(line, query) is None:
             pm = _PRICE.search(line)
             if pm:
                 price = _price(pm)
                 break
     if price is None:
-        all_prices = list(_PRICE.finditer(body))
+        all_prices = list(_PRICE.finditer("\n".join(lines)))
         if len(all_prices) == 1:                    # one price in the post: it's for this item
             price = _price(all_prices[0])
     if price is None:
