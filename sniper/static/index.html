@@ -186,6 +186,8 @@ select.site { width: auto; min-width: 150px; }
 #toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 10; max-width: calc(100vw - 32px); }
 .toast { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--good); border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.15); width: 320px; max-width: 100%; }
 .toast a { color: var(--link); }
+.toast-x { float: right; margin: -6px -6px 0 8px; min-width: 24px; min-height: 24px; padding: 0 4px; border: 0; background: none; color: var(--text-2); cursor: pointer; font-size: 14px; }
+.toast-x:hover { color: var(--text); }
 table.hist { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 table.hist td, table.hist th { padding: 3px 6px; border-bottom: 1px solid var(--border); text-align: right; }
 table.hist th:first-child, table.hist td:first-child { text-align: left; }
@@ -598,7 +600,19 @@ function toast(html, undo) {
   const t = document.createElement("div"); t.className = "toast";
   t.innerHTML = html + (undo ? ' <button class="linkbtn" type="button">Undo</button>' : "");
   if (undo) t.querySelector("button").onclick = () => { undo(); t.remove(); };
-  $("#toasts").append(t); setTimeout(() => t.remove(), 6000);
+  showToast(t, 6000);
+}
+// Toasts stay while you hover or tab into them (time to read, or to hit Undo), and have a close button.
+function showToast(t, ms) {
+  const x = document.createElement("button"); x.type = "button"; x.className = "toast-x"; x.textContent = "✕"; x.setAttribute("aria-label", "Dismiss");
+  x.onclick = () => t.remove(); t.prepend(x);
+  let timer;
+  const arm = () => { clearTimeout(timer); timer = setTimeout(() => t.remove(), ms); };
+  const hold = () => clearTimeout(timer);
+  t.addEventListener("mouseenter", hold); t.addEventListener("focusin", hold);
+  t.addEventListener("mouseleave", () => { if (!t.contains(document.activeElement)) arm(); });
+  t.addEventListener("focusout", e => { if (!t.contains(e.relatedTarget) && !t.matches(":hover")) arm(); });
+  $("#toasts").append(t); arm();
 }
 
 // Instant client-side search within the listings on screen (every word must appear)
@@ -737,7 +751,7 @@ async function pollAlerts() {
       state.lastAlert = Math.max(state.lastAlert, a.id);
       const t = document.createElement("div"); t.className = "toast";
       t.innerHTML = `<b>${money(a.total)}</b> · ${esc(a.reason)}<div style="font-size:12px;color:var(--text-2)">${esc(a.title)}</div><a href="${esc(a.url)}" target="_blank" rel="noopener">Open listing ↗</a>`;
-      $("#toasts").append(t); setTimeout(() => t.remove(), 15000);
+      showToast(t, 15000);
       if ("Notification" in window && Notification.permission === "granted") {
         const n = new Notification(`${money(a.total)} — ${a.reason}`, {body: a.title}); n.onclick = () => window.open(a.url, "_blank");
       }
