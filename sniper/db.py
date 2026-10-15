@@ -90,9 +90,18 @@ class DB:
                 self.conn.execute("ALTER TABLE watches ADD COLUMN user_id INTEGER")
             self.conn.commit()
 
+    # --- locked reads: the connection is shared by the API's worker threads ---
+    def _read(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
+        with self.lock:
+            return self.conn.execute(sql, params).fetchall()
+
+    def _read_one(self, sql: str, params: tuple = ()) -> Optional[sqlite3.Row]:
+        rows = self._read(sql, params)
+        return rows[0] if rows else None
+
     # --- app-wide settings (e.g. the maintenance notice) -------------------
     def get_setting(self, key: str) -> Optional[str]:
-        r = self.conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+        r = self._read_one("SELECT value FROM app_settings WHERE key=?", (key,))
         return r["value"] if r else None
 
     def set_setting(self, key: str, value: Optional[str]) -> None:
@@ -120,11 +129,11 @@ class DB:
         return self.get_user(cur.lastrowid)
 
     def get_user(self, uid: int) -> Optional[User]:
-        r = self.conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        r = self._read_one("SELECT * FROM users WHERE id=?", (uid,))
         return self._row_to_user(r) if r else None
 
     def authenticate(self, email: str, password: str) -> Optional[User]:
-        r = self.conn.execute("SELECT * FROM users WHERE email=?", (email.strip(),)).fetchone()
+        r = self._read_one("SELECT * FROM users WHERE email=?", (email.strip(),))
         if r and security.verify_password(password, r["pw_hash"]):
             return self._row_to_user(r)
         security.verify_password(password, security.hash_password("timing-equalizer"))
@@ -142,7 +151,7 @@ class DB:
             self.conn.execute("UPDATE users SET gmail_email=?, gmail_token=? WHERE id=?", (email, enc, uid))
 
     def get_gmail_token(self, uid: int) -> Optional[str]:
-        r = self.conn.execute("SELECT gmail_token FROM users WHERE id=?", (uid,)).fetchone()
+        r = self._read_one("SELECT gmail_token FROM users WHERE id=?", (uid,))
         return security.decrypt(r["gmail_token"]) if r and r["gmail_token"] else None
 
     def create_session(self, uid: int, days: int = 30) -> str:
@@ -153,8 +162,8 @@ class DB:
         return token
 
     def session_user(self, token: str) -> Optional[User]:
-        r = self.conn.execute("SELECT user_id, expires_at FROM sessions WHERE token_hash=?",
-                              (security.token_digest(token),)).fetchone()
+        r = self._read_one("SELECT user_id, expires_at FROM sessions WHERE token_hash=?",
+                           (security.token_digest(token),))
         if not r or r["expires_at"] < utcnow().isoformat():
             return None
         return self.get_user(r["user_id"])
@@ -191,15 +200,15 @@ class DB:
         return self.get_watch(w.id)
 
     def get_watch(self, wid: int) -> Optional[Watch]:
-        r = self.conn.execute("SELECT * FROM watches WHERE id=?", (wid,)).fetchone()
+        r = self._read_one("SELECT * FROM watches WHERE id=?", (wid,))
         return self._row_to_watch(r) if r else None
 
     def list_watches(self, user_id: Optional[int] = None) -> list[Watch]:
         """All watches (for the background loop), or one user's."""
         if user_id is None:
-            rows = self.conn.execute("SELECT * FROM watches ORDER BY id")
+            rows = self._read("SELECT * FROM watches ORDER BY id")
         else:
-            rows = self.conn.execute("SELECT * FROM watches WHERE user_id=? ORDER BY id", (user_id,))
+            rows = self._read("SELECT * FROM watches WHERE user_id=? ORDER BY id", (user_id,))
         return [self._row_to_watch(r) for r in rows]
 
     def delete_watch(self, wid: int) -> None:
@@ -212,7 +221,7 @@ class DB:
     # --- listings ----------------------------------------------------------
     def get_listing_rows(self, wid: int, active_only: bool = True) -> list[sqlite3.Row]:
         q = "SELECT * FROM listings WHERE watch_id=?" + (" AND active=1" if active_only else "")
-        return self.conn.execute(q, (wid,)).fetchall()
+        return self._read(q, (wid,))
 
     def existing_listings(self, wid: int) -> dict[str, sqlite3.Row]:
         return {r["key"]: r for r in self.get_listing_rows(wid, active_only=False)}
@@ -241,10 +250,10 @@ class DB:
 
     def reference_totals(self, wid: int, bucket: str, since: str, max_risk: int) -> list[float]:
         """Totals of every distinct, non-risky listing seen recently (active or gone)."""
-        rows = self.conn.execute(
+        rows = self._read(
             "SELECT total FROM listings WHERE watch_id=? AND bucket=? AND last_seen>=? AND risk<?",
             (wid, bucket, since, max_risk),
-        ).fetchall()
+        )
         return [r["total"] for r in rows]
 
     # --- alerts & snapshots -----------------------------------------------
@@ -257,14 +266,14 @@ class DB:
 
     def list_alerts(self, user_id: Optional[int] = None, since_id: int = 0, limit: int = 50) -> list[dict]:
         if user_id is None:
-            rows = self.conn.execute(
+            rows = self._read(
                 "SELECT * FROM alerts WHERE id>? ORDER BY id DESC LIMIT ?", (since_id, limit)
-            ).fetchall()
+            )
         else:
-            rows = self.conn.execute(
+            rows = self._read(
                 """SELECT a.* FROM alerts a JOIN watches w ON w.id = a.watch_id
                    WHERE w.user_id=? AND a.id>? ORDER BY a.id DESC LIMIT ?""", (user_id, since_id, limit)
-            ).fetchall()
+            )
         return [dict(r) for r in rows]
 
     def add_snapshot(self, wid: int, ts: str, bucket: str, min_total: float, median_total: float, count: int) -> None:
@@ -274,8 +283,8 @@ class DB:
             )
 
     def snapshots(self, wid: int, since: str) -> list[dict]:
-        rows = self.conn.execute(
+        rows = self._read(
             "SELECT ts, bucket, min_total, median_total, count FROM snapshots WHERE watch_id=? AND ts>=? ORDER BY ts",
             (wid, since),
-        ).fetchall()
+        )
         return [dict(r) for r in rows]

@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Price Sniper</title>
+<script>
+  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
 <style>
 :root {
   color-scheme: light;
@@ -109,6 +112,8 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .auth-card { width: 100%; max-width: 360px; }
 .auth-card h1 { font-size: 20px; margin: 0 0 4px; }
 .auth-card .sub { color: var(--text-2); margin: 0 0 12px; }
+.theme-btn { white-space: nowrap; }
+.auth-card .theme-btn { float: right; margin-top: -2px; }
 .linkbtn { background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; font: inherit; }
 .user { display: flex; gap: 8px; align-items: center; }
 .user .email { color: var(--text-2); font-size: 13px; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -132,6 +137,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
 <div id="notice" role="status" aria-live="polite" hidden></div>
 <div class="auth-wrap" id="auth" hidden>
   <div class="card auth-card">
+    <button class="theme-btn" type="button" data-theme-toggle></button>
     <h1>🎯 Price Sniper</h1>
     <p class="sub" id="authSub">Sign in to see your watches.</p>
     <form id="authForm">
@@ -153,7 +159,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
 <header>
   <h1>🎯 Price Sniper</h1>
   <div class="status" id="status"></div>
-  <div class="user"><span class="email" id="who"></span><button id="settingsBtn">Settings</button><button id="logoutBtn">Sign out</button></div>
+  <div class="user"><span class="email" id="who"></span><button class="theme-btn" type="button" data-theme-toggle></button><button id="settingsBtn">Settings</button><button id="logoutBtn">Sign out</button></div>
 </header>
 
 <dialog id="settings">
@@ -498,6 +504,25 @@ async function boot() {
   const g = new URLSearchParams(location.search).get("gmail");
   if (g) { history.replaceState(null, "", "/"); if (g === "connected") $("#settingsBtn").click(); }
 }
+// --- theme: Auto (follow the device) -> Light -> Dark ---------------------
+const THEMES = {auto: ["🖥", "Auto"], light: ["☀️", "Light"], dark: ["🌙", "Dark"]};
+function currentTheme() { return document.documentElement.dataset.theme || "auto"; }
+function applyTheme(t) {
+  if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { t === "auto" ? localStorage.removeItem("theme") : localStorage.setItem("theme", t); } catch {}
+  document.querySelectorAll("[data-theme-toggle]").forEach(b => {
+    const [icon, label] = THEMES[t];
+    b.textContent = `${icon} ${label}`;
+    b.title = "Theme: " + label + " (click to change)";
+    b.setAttribute("aria-label", "Theme: " + label + ". Click to change.");
+  });
+}
+document.querySelectorAll("[data-theme-toggle]").forEach(b => b.onclick = () => {
+  const order = ["auto", "light", "dark"];
+  applyTheme(order[(order.indexOf(currentTheme()) + 1) % order.length]);
+});
+applyTheme(currentTheme());
+
 // --- update heads-up -----------------------------------------------------
 // The server announces downtime a minute ahead; we count down locally, then
 // wait for the new version (a new boot_id) and reload.
@@ -523,7 +548,7 @@ function renderNotice() {
   const left = Math.max(0, Math.ceil((notice.deadline - now) / 1000));
   if (notice.down || left === 0) {
     el.className = "down";
-    el.innerHTML = `<div class="head">🔧 Updating now…</div><span class="msg">This page will reload by itself when it's back. ${esc(notice.msg)}</span>`;
+    el.innerHTML = `<div class="head">🔧 Updating now…</div><span class="msg">This page will reload by itself when it's back.</span>`;
   } else {
     el.className = left <= 15 ? "urgent" : "";
     const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, "0");

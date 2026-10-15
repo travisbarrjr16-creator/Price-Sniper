@@ -229,3 +229,25 @@ def test_maintenance_notice(tmp_path, monkeypatch):
     # the notice is cleared when the new version starts up
     with TestClient(build_app(db=db, background=False)) as restarted:
         assert restarted.get("/api/notice").json()["maintenance"] is None
+
+
+def test_db_safe_under_concurrent_requests(tmp_path, monkeypatch):
+    """API worker threads share one SQLite connection; reads must not collide with writes."""
+    from concurrent.futures import ThreadPoolExecutor
+    monkeypatch.setenv("SNIPER_SECRET_FILE", str(tmp_path / "secret"))
+    db = DB(str(tmp_path / "c.db"))
+    u = db.create_user("a@example.com", "hunter2hunter2")
+    token = db.create_session(u.id)
+    w = db.create_watch(Watch(query="RTX 4060", user_id=u.id))
+
+    def work(i):
+        for j in range(40):
+            assert db.session_user(token).id == u.id
+            db.upsert_listing(w.id, f"k{i}-{j}", {}, 100.0, 100.0, "new", 0, "2026-01-01")
+            db.get_listing_rows(w.id)
+            db.list_watches(u.id)
+            db.create_session(u.id)
+
+    with ThreadPoolExecutor(8) as ex:
+        list(ex.map(work, range(8)))
+    assert len(db.get_listing_rows(w.id)) == 320

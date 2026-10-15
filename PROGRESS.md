@@ -54,6 +54,7 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
 - Passwords are hashed (scrypt). Sessions are random tokens stored hashed (30 days). Stored Gmail tokens are encrypted.
 - Optional **invite code** so only people you give it to can sign up.
 - Login is rate-limited (10 failed tries locks that email for 15 minutes). Each user can have up to 25 watches.
+- **Theme button** (🖥 Auto / ☀️ Light / 🌙 Dark) on desktop and phone; remembered per browser.
 - **Big red warning** on sign-up and on the Gmail connect step: "USE A NEW EMAIL JUST FOR THIS APP", so alerts don't flood your main inbox.
 
 ### Updates without surprising users
