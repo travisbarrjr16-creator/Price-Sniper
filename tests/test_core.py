@@ -464,3 +464,21 @@ def test_several_finds_make_one_phone_notification(tmp_path):
     title, msg, url, urgent = pushes[0]
     assert title.startswith("3 deals · RTX 4060 · from $190.00")
     assert msg.startswith("🎯 hit your $200 target: $190.00") and url.endswith("RTX 4060 d") and urgent
+
+
+@pytest.mark.parametrize("query,title,ok", [
+    # PC parts: units and kit notation shouldn't matter
+    ("DDR5 2x16 6400", "Corsair Vengeance 32GB (2x16GB) DDR5 6400MHz CL32", True),
+    ("DDR5 2x16 6400", "G.Skill Trident Z5 RGB DDR5-6400 32GB (2 x 16GB)", True),
+    ("ddr5 2x16gb 6400mhz", "Kingston FURY Beast 32GB 2x16GB DDR5 6400 MT/s", True),
+    ("DDR5 3600", "G.Skill Trident Z5 DDR4 3600 32GB", False),          # "DDR5" isn't "DDR" + a stray 5
+    ("DDR5 2x16 6400", "Corsair 16GB (2x8GB) DDR5 6400 CL16", False),
+    ("DDR5 2x16 6400", "Corsair 32GB (2x16GB) DDR5 5600MHz", False),
+    ("Ryzen 7 7800X3D", "AMD Ryzen 7 7700X Processor", False),
+    ("1TB NVMe SN850X", "WD_BLACK 2TB SN850X NVMe Gen4 SSD", False),
+    ("750W 80+ Gold", "Corsair RM750e 750 W 80 Plus Gold", True),
+    ("Galaxy S24", "Samsung Galaxy S24+ 256GB", False),                   # S24+ is the Plus model
+    ("RTX4060", "MSI GeForce RTX 4060 Ventus 2X", True),
+])
+def test_part_matching(query, title, ok):
+    assert match(L(title), Watch(query=query))[0] is ok

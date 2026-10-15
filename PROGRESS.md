@@ -49,6 +49,10 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
   - Discord webhook.
   - Browser notifications and in-app pop-ups.
 
+### PC-part searches
+- Matching ignores units and spelling: "DDR5 2x16 6400" finds "32GB (2x16GB) DDR5-6400MHz", "2 x 16GB … 6400 MT/s", etc.
+- Model words stay intact: "DDR5" won't match a DDR4 kit that happens to say "Z5". "80+" = "80 Plus"; "S24+" is the Plus model.
+
 ### "Check on ↗" quick links
 - Every watch has buttons that open the item's own search on Walmart, Amazon, eBay, Newegg, Best Buy, FB Marketplace, OfferUp, Mercari, and Craigslist (with max price and ZIP where supported). No keys or accounts needed; results stay on that site.
 

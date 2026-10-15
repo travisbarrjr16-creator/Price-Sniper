@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from ..matching import normalize, tokens
+from ..matching import missing_query_word
 from ..models import Listing, Watch
 from .base import Source
 
@@ -69,13 +69,12 @@ def parse_hws(post: dict, query: str) -> Listing | None:
     have, want = m.group("have").strip(), m.group("want").lower()
     if not any(w in want for w in _MONEY_WORDS):
         return None                                 # trade-only or a buying post
-    if not all(t in normalize(have).split() for t in tokens(query)):
+    if missing_query_word(have, query) is not None:
         return None                                 # the item is only in [W], not [H]
     body = post.get("selftext", "") or ""
     price = None
-    q = tokens(query)
     for line in body.splitlines():                  # first price on a line that mentions the item
-        if all(t in normalize(line).split() for t in q):
+        if missing_query_word(line, query) is None:
             pm = _PRICE.search(line)
             if pm:
                 price = _price(pm)
