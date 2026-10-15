@@ -90,7 +90,7 @@ Get the new code onto GitHub (for example, from a Claude Code session), then on 
 Everyone using the app gets the orange 60-second countdown, then it updates and their page reloads. If anything fails, the banner is cancelled and the old version keeps running.
 
 ## 10. Good to know
-- **Backups:** every so often, copy `sniper.db` (everyone's watches and accounts), `.env` (your keys), and the `keys/` folder (Walmart key) somewhere safe. Without `.env`, saved Gmail connections can't be read.
+- **Backups:** the app writes a backup every day to `backups/` (database + `.env` + `keys/`, keeping the last 14). Make one any time with `.venv/bin/python -m sniper.admin backup`. **Copy the `backups/` folder off the computer now and then** (your PC, Google Drive…), because a backup on the same disk won't help if the disk dies. Old data is trimmed automatically: gone listings after 60 days, chart history after a year. Without `.env`, saved Gmail connections can't be read.
 - **Windows restarts:** the app starts when you **sign in** to Windows. If the PC reboots (for example, Windows Update), sign in again, or set Windows to sign in automatically.
 - **Logs if something's wrong:**
   - **Mac:** `logs/sniper.log`

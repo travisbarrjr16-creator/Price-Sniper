@@ -49,6 +49,12 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
   - Discord webhook.
   - Browser notifications and in-app pop-ups.
 
+### Overnight improvements (branch `overnight-improvements`), see OVERNIGHT_REPORT.md
+- Bug fixes: laptops/PCs/bundles no longer count as the part; r/hardwareswap reads current prices and skips SOLD; eBay location header, retry on rejected keys, multi-option listings flagged; Etsy shared secret; 2025 eBay condition IDs.
+- Reliability: Gmail "Reconnect" prompt (7-day expiry), 60s per-site time limit, relist detection, only one process runs the checks, failed push deliveries are reported, daily cleanup + backups, pinned library versions.
+- Visual: installable app icon, NEW / Lowest-ever badges, "found … ago · was $X", site initials, first-run screen with examples, chart max/target lines, compact view, search box, no sideways scrolling on any phone size.
+- Settings: Generate ntfy topic, test notification, privacy page, delete account.
+
 ### PC-part searches
 - Matching ignores units and spelling: "DDR5 2x16 6400" finds "32GB (2x16GB) DDR5-6400MHz", "2 x 16GB … 6400 MT/s", etc.
 - Model words stay intact: "DDR5" won't match a DDR4 kit that happens to say "Z5". "80+" = "80 Plus"; "S24+" is the Plus model.

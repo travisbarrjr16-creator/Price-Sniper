@@ -35,6 +35,13 @@ the whole flow right away.
 
 ## Day-to-day tools
 
+- **Badges:** 🏆 *Lowest ever* (the lowest total this watch has seen), **NEW** (found since your last visit; watches with new finds get a NEW tag too), "found 12 min ago · was $X".
+- **Compact view** and an instant **"Search these results"** box above the listings.
+- **Chart:** dashed lines for your max and 🎯 target.
+- **Install it like an app:** on a phone, open the site and use *Share → Add to Home Screen* (iPhone) or *Install app* (Android).
+- **Settings:** *Generate* a safe ntfy topic, **🔔 Send test notification**, failed deliveries are shown, *Delete my account*. There's also a [privacy page](sniper/static/privacy.html) at `/privacy`.
+- **Smarter matching for PC parts:** laptops, prebuilt PCs, lots and bundles don't count as the part (with *Exact model* on); "DDR5 2x16 6400" matches "32GB (2x16GB) DDR5-6400MHz".
+
 - **🎯 Target price:** an optional price you'd jump at, separate from the max. When a listing hits it, you get an urgent alert and the listing gets a 🎯 badge.
 - **Alert types:** 🎯 target hit and 🔥 new lowest are sent as urgent. ⬇ price drop under max and 🆕 new under max are normal priority, unless the price rates as a great deal.
 - **✕ Not interested / 🔇 Mute seller** on every listing. Hidden items stop alerting. You can undo from the pop-up, from "Show N you hid", or from Settings.
