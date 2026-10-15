@@ -290,7 +290,8 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
             <label><input type="checkbox" name="include_auctions"> Include auctions</label>
           </div>
         </details>
-        <div style="margin-top:12px"><button class="primary" id="add" type="submit">Start watching</button></div>
+        <div style="margin-top:12px; display:flex; gap:8px"><button class="primary" id="add" type="submit">Start watching</button>
+          <button type="button" id="cancelEdit" hidden>Cancel</button></div>
       </form>
     </div>
     <div class="card">
@@ -369,15 +370,29 @@ $("#f").addEventListener("submit", async e => {
       return on.length === all.length ? [] : on.map(i => i.value); })(),
   };
   if (!body.conditions.length) { alert("Tick at least one condition (New, Used, …)."); return; }
-  const btn = $("#add"); btn.disabled = true; btn.textContent = "Searching…";
+  const btn = $("#add"); btn.disabled = true;
+  const editing = state.watches.find(x => x.id === state.editing);
+  btn.textContent = editing ? "Saving…" : "Searching…";
   try {
-    const w = await api("/api/watches", {method: "POST", body: JSON.stringify(body)});
-    state.sel = w.id; state.site = ""; e.target.reset(); document.querySelectorAll("#conds input, #srcs input").forEach(i => i.checked = true);
-    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
-    await refresh();
+    if (editing) {          // keeps the watch's price history and listings
+      await api(`/api/watches/${editing.id}`, {method: "PUT", body: JSON.stringify({...body, active: editing.active})});
+      state.sel = editing.id; toast("Saved. Changes apply from the next check.");
+    } else {
+      const w = await api("/api/watches", {method: "POST", body: JSON.stringify(body)});
+      state.sel = w.id; state.site = "";
+      if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+    }
+    endEdit(); await refresh();
   } catch (err) { alert(err.message); }
-  btn.disabled = false; btn.textContent = "Start watching";
+  btn.disabled = false; if (!state.editing) btn.textContent = "Start watching"; else btn.textContent = "Save changes";
 });
+function endEdit() {
+  state.editing = null;
+  $("#f").reset(); document.querySelectorAll("#conds input, #srcs input").forEach(i => i.checked = true);
+  $("#add").textContent = "Start watching"; $("#cancelEdit").hidden = true;
+  $("#f").closest(".card").querySelector("h2").textContent = "New watch";
+}
+$("#cancelEdit").onclick = endEdit;
 
 const EMPTY_MAIN = `<div class="card welcome">
   <h2>👋 Start your first watch</h2>
@@ -450,6 +465,7 @@ async function renderMainInner(w) {
           ${w.last_error ? `<div class="err">${esc(w.last_error)}</div>` : ""}</div>
         <div class="toolbar">
           <button id="chk">Check now</button>
+          <button id="edit" title="Change this watch's settings (keeps its price history)">Edit</button>
           <button id="dup" title="Copy these settings into the New watch form">Duplicate</button>
           <button id="pause">${w.active ? "Pause" : "Resume"}</button>
           <button id="del">Delete</button>
@@ -494,12 +510,14 @@ async function renderMainInner(w) {
   $("#del").onclick = async () => {
     if (!confirm(`Stop watching "${w.query}"?`)) return;
     await api(`/api/watches/${w.id}`, {method: "DELETE"}).catch(() => {});   // already gone is fine
+    if (state.editing === w.id) endEdit();
     state.sel = null; refresh();
   };
   $("#sort").querySelectorAll("button").forEach(b => b.onclick = () => { state.sort = b.dataset.k; try { localStorage.setItem("sort", state.sort); } catch {} renderMain(); });
   $("#sh").onchange = e => { state.showHidden = e.target.checked; renderMain(); };
   if ($("#sm")) $("#sm").onchange = e => { state.showMine = e.target.checked; renderMain(); };
   $("#dup").onclick = () => duplicateWatch(w);
+  $("#edit").onclick = () => editWatch(w);
   document.querySelectorAll("[data-hide]").forEach(b => b.onclick = async () => {
     const {hide, value, label} = b.dataset;
     const undo = b.dataset.undo === "1";
@@ -534,7 +552,20 @@ function quickLinks(w) {
   ];
 }
 
+function editWatch(w) {
+  fillForm(w);
+  state.editing = w.id;
+  $("#add").textContent = "Save changes"; $("#cancelEdit").hidden = false;
+  $("#f").closest(".card").querySelector("h2").textContent = `Edit: ${w.query}`;
+  toast("Editing this watch. Its price history is kept.");
+}
+
 function duplicateWatch(w) {
+  endEdit(); fillForm(w);
+  toast("Settings copied. Change the item name, then Start watching.");
+}
+
+function fillForm(w) {
   const f = $("#f");
   for (const k of ["query", "max_price", "target_price", "interval_minutes", "zip_code", "radius_miles"]) f[k].value = w[k] ?? "";
   f.required_terms.value = w.required_terms.join(", "); f.excluded_terms.value = w.excluded_terms.join(", ");
@@ -545,7 +576,6 @@ function duplicateWatch(w) {
   f.querySelector("details").open = true;
   f.scrollIntoView({behavior: "smooth", block: "start"});
   f.query.focus(); f.query.select();
-  toast("Settings copied. Change the item name, then Start watching.");
 }
 
 function toast(html, undo) {
@@ -723,6 +753,7 @@ $("#logoutBtn").onclick = async () => {
   state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: "", showMine: false, showHidden: false};
   $("#main").innerHTML = EMPTY_MAIN; $("#watches").innerHTML = '<div class="empty">Nothing yet.</div>';
   setAuthMode(false);        // come back to "Sign in", not "Create account"
+  endEdit();
   showAuth();
 };
 
