@@ -17,7 +17,7 @@ It runs one real search per site and prints `OK, 37 listings…` or the exact er
 |---|---|---|---|---|
 | ☐ | **eBay** (most important) | [developer.ebay.com](https://developer.ebay.com) | `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` | Use the **Production** keyset, not Sandbox |
 | ☐ | **Walmart** | [walmart.io](https://walmart.io) | `WALMART_CONSUMER_ID`, `WALMART_PRIVATE_KEY_PATH` | Steps below. Approval may be needed |
-| ☐ | **Reddit** | [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | "create app" → type **script** |
+| ☐ | **Reddit** | [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME` | "create app" → type **script**. The username identifies the app to Reddit, which avoids throttling |
 | ☐ | **Best Buy** | [developer.bestbuy.com](https://developer.bestbuy.com) | `BESTBUY_API_KEY` | May reject free email addresses |
 | ☐ | **Etsy** | [etsy.com/developers](https://www.etsy.com/developers) | `ETSY_API_KEY` **and** `ETSY_SHARED_SECRET` | Optional, handmade/vintage. Both are required since Jan 2026 |
 | ☐ | **Reverb** | reverb.com → Settings → API & Integrations | `REVERB_TOKEN`, or `REVERB_ENABLED=1` to try without one | Optional, music gear. Search reportedly works with no account |

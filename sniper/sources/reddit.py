@@ -135,7 +135,10 @@ class RedditSource(Source):
     def __init__(self) -> None:
         self.client_id = os.getenv("REDDIT_CLIENT_ID", "")
         self.client_secret = os.getenv("REDDIT_CLIENT_SECRET", "")
-        self.user_agent = os.getenv("REDDIT_USER_AGENT", "price-sniper/0.1 (personal deal watcher)")
+        # Reddit's required format: <platform>:<app id>:<version> (by /u/<username>). Generic ones get throttled.
+        who = os.getenv("REDDIT_USERNAME", "").strip().lstrip("/").removeprefix("u/")
+        self.user_agent = os.getenv("REDDIT_USER_AGENT") or (
+            f"python:price-sniper:v0.2 (by /u/{who})" if who else "python:price-sniper:v0.2 (personal deal watcher)")
         self._token: str | None = None
         self._expiry = 0.0
 

@@ -343,6 +343,7 @@ class DB:
             for t in ("sessions", "password_resets", "user_hidden"):
                 self.conn.execute(f"DELETE FROM {t} WHERE user_id=?", (uid,))
             self.conn.execute("DELETE FROM users WHERE id=?", (uid,))
+            self.conn.execute("DELETE FROM app_settings WHERE key=?", (f"push_error:{uid}",))
 
     # --- listings ----------------------------------------------------------
     def get_listing_rows(self, wid: int, active_only: bool = True) -> list[sqlite3.Row]:
