@@ -26,6 +26,10 @@ SCAM_PHRASES = [
     "gift card", "western union", "shipping only", "ship only", "no local",
     "text me", "email me", "contact me at", "whatsapp", "deposit required",
     "send money", "paypal friends", "friends and family",
+    # classic "pay first" stories (deposit to hold it, seller far away, unusual payment)
+    # (not plain "deposit"/"hold": honest sellers write "no deposits, no holds")
+    "send a deposit", "small deposit", "deposit to hold", "deposit first", "money order",
+    "cashier's check", "cashiers check", "deployed", "moving overseas", "codes only",
 ]
 
 RISK_HIDE_THRESHOLD = 50
@@ -72,6 +76,10 @@ def assess_risk(listing: Listing, reference_median: Optional[float], total: floa
     if listing.seller_rating is not None and listing.seller_rating < 95:
         score += 20
         flags.append(f"seller rating {listing.seller_rating:g}%")
+
+    if listing.price_varies:
+        score += 15
+        flags.append("price varies by option (check the price for this exact item)")
 
     text = f"{listing.title} {listing.description}".lower()
     hits = [p for p in SCAM_PHRASES if p in text]

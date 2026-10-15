@@ -8,6 +8,7 @@ import base64
 import os
 import time
 from datetime import datetime
+from urllib.parse import quote
 
 import httpx
 
@@ -91,9 +92,14 @@ class EbaySource(Source):
         headers = {"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}
         if watch.zip_code:
             # lets eBay compute shipping cost to the user's ZIP
-            headers["X-EBAY-C-ENDUSERCTX"] = f"contextualLocation=country=US,zip={watch.zip_code}"
+            # eBay expects the inner value URL-encoded: contextualLocation=country%3DUS%2Czip%3D78701
+            headers["X-EBAY-C-ENDUSERCTX"] = "contextualLocation=" + quote(f"country=US,zip={watch.zip_code}", safe="")
         params = {"q": watch.query, "limit": "200", "filter": self._filters(watch, local), "sort": "price"}
         r = await client.get(SEARCH_URL, headers=headers, params=params)
+        if r.status_code == 401:            # token revoked or expired early: get a fresh one and retry once
+            self._token = None
+            headers["Authorization"] = f"Bearer {await self._get_token(client)}"
+            r = await client.get(SEARCH_URL, headers=headers, params=params)
         r.raise_for_status()
         return r.json().get("itemSummaries", [])
 
@@ -131,6 +137,8 @@ class EbaySource(Source):
             is_auction=is_auction,
             image_url=(it.get("image") or {}).get("imageUrl"),
             description=it.get("shortDescription", "") or "",
+            # one listing with several options (e.g. a GPU and a $5 cable): the shown price is just one option
+            price_varies=bool(it.get("itemGroupType") or it.get("itemGroupHref")),
             listed_at=datetime.fromisoformat(listed.replace("Z", "+00:00")) if listed else None,
         )
 

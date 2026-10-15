@@ -124,3 +124,40 @@ def test_hardwareswap_current_prices_only(body, price):
             "permalink": "/x", "author": "a", "created_utc": 1}
     got = parse_hws(post, "RTX 4060")
     assert (got.price if got else None) == price
+
+
+def test_ebay_listing_parse_and_headers():
+    import asyncio
+    import httpx
+    from sniper.models import Watch
+    from sniper.sources.ebay import EbaySource
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        if req.url.path.endswith("/token"):
+            return httpx.Response(200, json={"access_token": f"tok{len(seen)}", "expires_in": 7200})
+        if req.headers["authorization"] == "Bearer tok1":
+            return httpx.Response(401)                               # first token rejected early
+        return httpx.Response(200, json={"itemSummaries": [{
+            "itemId": "v1|123|0", "title": "MSI RTX 4060 Ventus 2X 8GB", "price": {"value": "249.99", "currency": "USD"},
+            "conditionId": "3000", "itemWebUrl": "https://www.ebay.com/itm/123",
+            "shippingOptions": [{"shippingCost": {"value": "12.50"}}, {"shippingCost": {"value": "0.00"}}],
+            "seller": {"username": "gpuguy", "feedbackPercentage": "99.6", "feedbackScore": 812},
+            "buyingOptions": ["FIXED_PRICE", "BEST_OFFER"], "itemGroupType": "SELLER_DEFINED_VARIATIONS"}]})
+
+    src = EbaySource()
+    src.client_id, src.client_secret = "id", "secret"
+    w = Watch(query="RTX 4060", zip_code="78701")
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await src.search(w, c)
+    (l,) = asyncio.run(run())
+    assert (l.price, l.shipping, l.condition, l.seller_rating, l.seller_feedback_count) == (249.99, 0.0, "used", 99.6, 812)
+    assert l.price_varies
+    searches = [r for r in seen if "item_summary" in r.url.path]
+    assert len(searches) == 2                                         # retried once with a fresh token
+    assert searches[-1].headers["x-ebay-c-enduserctx"] == "contextualLocation=country%3DUS%2Czip%3D78701"
+    f = searches[-1].url.params["filter"]
+    assert "priceCurrency:USD" in f and "buyingOptions:{FIXED_PRICE|BEST_OFFER}" in f and "conditionIds:{" in f

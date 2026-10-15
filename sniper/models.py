@@ -37,6 +37,7 @@ class Listing:
     description: str = ""            # snippet, used for scam heuristics
     listed_at: Optional[datetime] = None
     source_key: str = ""             # adapter key ("ebay", "walmart"...), set by the watcher
+    price_varies: bool = False       # multi-option listing: the price shown may not be for this item
 
     @property
     def key(self) -> str:
