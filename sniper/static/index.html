@@ -159,6 +159,13 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .usage .bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 .usage .bar i.hot { background: var(--orange-line); }
 .usage .sub { grid-column: 2; font-size: 12px; color: var(--muted); margin-top: -2px; }
+#bellBtn { position: relative; }
+.bellcount { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px;
+  background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.alert-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.alert-row .r { font-size: 13px; } .alert-row .tt { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+.alert-row .when { font-size: 11px; color: var(--muted); }
+.alert-row.unread .r::before { content: "● "; color: var(--accent); }
 .mutelist { list-style: none; padding: 0; margin: 4px 0 0; max-height: 160px; overflow: auto; }
 .mutelist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .mutelist button { font-size: 12px; padding: 3px 8px; min-height: 26px; }
@@ -217,8 +224,15 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
 <header>
   <h1>🎯 Price Sniper</h1>
   <div class="status" id="status"></div>
-  <div class="user"><span class="email" id="who"></span><button class="theme-btn" type="button" data-theme-toggle></button><button id="settingsBtn">Settings</button><button id="logoutBtn">Sign out</button></div>
+  <div class="user"><span class="email" id="who"></span><button type="button" id="bellBtn" aria-label="Recent alerts" title="Recent alerts">🔔<span class="bellcount" id="bellCount" hidden></span></button><button class="theme-btn" type="button" data-theme-toggle></button><button id="settingsBtn">Settings</button><button id="logoutBtn">Sign out</button></div>
 </header>
+
+<dialog id="alertsDlg" aria-labelledby="alertsTitle">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px">
+    <h2 id="alertsTitle" style="margin:0">Recent alerts</h2><button type="button" id="alertsClose">Close</button>
+  </div>
+  <div id="alertsList" style="margin-top:10px"></div>
+</dialog>
 
 <dialog id="settings">
   <h2>Alerts & accounts</h2>
@@ -689,6 +703,30 @@ function drawChart(snaps, w = {}) {
   hit.addEventListener("mouseleave", () => { tip.style.display = "none"; xh.style.display = "none"; });
 }
 
+// 🔔 recent alerts: everything the watches found, even if you missed the pop-up
+const alertsSeen = {
+  get() { try { return +localStorage.getItem("alertsSeen") || 0; } catch { return 0; } },
+  set(id) { try { localStorage.setItem("alertsSeen", String(id)); } catch {} },
+};
+async function updateBell() {
+  try {
+    const unread = (await api(`/api/alerts?since_id=${alertsSeen.get()}`)).length;
+    $("#bellCount").hidden = !unread; $("#bellCount").textContent = unread > 49 ? "50+" : unread;
+    $("#bellBtn").setAttribute("aria-label", unread ? `Recent alerts, ${unread} new` : "Recent alerts");
+  } catch {}
+}
+$("#bellBtn").onclick = async () => {
+  const list = await api("/api/alerts").catch(() => []), seen = alertsSeen.get();
+  $("#alertsList").innerHTML = list.length ? list.map(a => `<div class="alert-row ${a.id > seen ? "unread" : ""}">
+      <div><div class="r"><b>${money(a.total)}</b> · ${esc(a.reason)}</div><div class="tt">${esc(a.title)}</div>
+        <div class="when">${esc(a.query || "")} · ${ago(a.created_at)}</div></div>
+      <a class="open" href="${esc(a.url)}" target="_blank" rel="noopener" style="align-self:center;padding:5px 10px;border-radius:6px;background:var(--accent);color:var(--accent-ink);text-decoration:none;font-size:13px">Open ↗</a>
+    </div>`).join("") : '<div class="empty">No alerts yet. They show up here when a watch finds a deal.</div>';
+  if (list.length) alertsSeen.set(list[0].id);
+  updateBell(); $("#alertsDlg").showModal();
+};
+$("#alertsClose").onclick = () => $("#alertsDlg").close();
+
 async function pollAlerts() {
   try {
     const list = await api(`/api/alerts?since_id=${state.lastAlert ?? 0}`);
@@ -703,6 +741,7 @@ async function pollAlerts() {
       }
     }
     if (list.length) refresh();
+    updateBell();
   } catch {}
 }
 

@@ -401,7 +401,7 @@ class DB:
             )
         else:
             rows = self._read(
-                """SELECT a.* FROM alerts a JOIN watches w ON w.id = a.watch_id
+                """SELECT a.*, json_extract(w.data, '$.query') AS query FROM alerts a JOIN watches w ON w.id = a.watch_id
                    WHERE w.user_id=? AND a.id>? ORDER BY a.id DESC LIMIT ?""", (user_id, since_id, limit)
             )
         return [dict(r) for r in rows]
