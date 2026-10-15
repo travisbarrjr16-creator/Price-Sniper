@@ -32,7 +32,7 @@ Say "Installing Price Sniper and its dependencies"
 if (-not (Test-Path .venv)) { & $py[0] @pyExtra -m venv .venv }
 $vpy = "$Root\.venv\Scripts\python.exe"
 & $vpy -m pip install -q --upgrade pip
-& $vpy -m pip install -q -e ".[dev]"
+& $vpy -m pip install -q -c constraints.txt -e ".[dev]"
 
 # --- 3. Settings file (.env) -----------------------------------------------------
 $tsUrl = ""

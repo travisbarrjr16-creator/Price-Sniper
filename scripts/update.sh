@@ -27,7 +27,7 @@ trap '"$PY" -m sniper.maintenance cancel; echo "update failed; notice cancelled,
 
 # Fetch and install during the countdown. The running app keeps serving the old code.
 git pull --ff-only
-"$PY" -m pip install -q -e ".[dev]"
+"$PY" -m pip install -q -c constraints.txt -e ".[dev]"
 "$PY" -m pytest -q
 
 echo "waiting ${NOTICE_SECONDS}s for the countdown..."

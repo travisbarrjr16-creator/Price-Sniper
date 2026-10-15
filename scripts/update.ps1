@@ -11,7 +11,7 @@ else { & $vpy -m sniper.maintenance announce --in $Seconds }
 try {
     # Fetch and install during the countdown. The running app keeps serving the old code.
     git pull --ff-only;               if ($LASTEXITCODE) { throw "git pull failed" }
-    & $vpy -m pip install -q -e ".[dev]"; if ($LASTEXITCODE) { throw "install failed" }
+    & $vpy -m pip install -q -c constraints.txt -e ".[dev]"; if ($LASTEXITCODE) { throw "install failed" }
     & $vpy -m pytest -q;              if ($LASTEXITCODE) { throw "tests failed" }
 } catch {
     & $vpy -m sniper.maintenance cancel

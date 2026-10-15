@@ -37,7 +37,7 @@ fi
 say "Installing Price Sniper and its dependencies"
 [[ -d .venv ]] || "$PY" -m venv .venv
 .venv/bin/python -m pip install -q --upgrade pip
-.venv/bin/python -m pip install -q --no-cache-dir -e ".[dev]"
+.venv/bin/python -m pip install -q --no-cache-dir -c constraints.txt -e ".[dev]"
 
 # --- 3. Settings file (.env) -----------------------------------------------------
 TS_URL=""
