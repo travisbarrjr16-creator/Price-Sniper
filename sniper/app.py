@@ -219,6 +219,9 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     @app.post("/api/auth/login")
     def login(body: Credentials, response: Response):
         key = body.email.strip().lower()
+        if len(login_failures) > 5000:          # forget stale entries so this can't grow forever
+            for k in [k for k, ts in login_failures.items() if not ts or time.time() - ts[-1] > 900]:
+                del login_failures[k]
         recent = [t for t in login_failures[key] if time.time() - t < 900]
         login_failures[key] = recent
         if len(recent) >= 10:
