@@ -910,3 +910,26 @@ def test_fourth_review_matching_cases():
                     Watch(query=q))[0]
         assert got == expected, (q, t)
     assert live_lines("3070 $300 - Gone today, thanks") == []
+
+
+def test_loose_searches_and_typos():
+    from sniper.matching import match
+    cases = [("ram", "Corsair Vengeance 16GB DDR4 3200 Desktop Memory", True),
+             ("ram ddr4", "Corsair Vengeance 16GB DDR4 3200 Desktop Memory", True),
+             ("ram ddr4", "Corsair Vengeance 32GB DDR5 6000", False),
+             ("gpu", "MSI RTX 4060 Ventus 8GB Graphics Card", True),
+             ("ssd 1tb", "Samsung 990 PRO 1TB NVMe M.2", True),
+             ("ssd 1tb", "Samsung 990 PRO 2TB NVMe M.2", False),
+             ("corsiar vengance ddr5", "CORSAIR VENGEANCE DDR5 32GB", True),     # typos in names are OK
+             ("nvidea rtx 4060", "NVIDIA GeForce RTX 4060 8GB", True),
+             ("rysen 7 7800x3d", "AMD Ryzen 7 7800X3D", True),
+             ("logitec g502", "Logitech G502 Hero", True),
+             ("ram", "Dell Inspiron Laptop 16GB RAM 512GB SSD", False),          # a laptop isn't RAM
+             ("gpu 8gb", "HP Gaming PC RTX 4060 8GB", False),
+             ("rtx 4060", "RTX 4070 12GB", False),                               # numbers stay exact
+             ("dell monitor", "Bell monitor stand", False),
+             ("memory card 128gb", "SanDisk 128GB microSD memory card", True)]
+    for q, t, expected in cases:
+        got = match(Listing(source="T", source_id="1", title=t, url="https://x", price=100, condition="new"),
+                    Watch(query=q))[0]
+        assert got == expected, (q, t)

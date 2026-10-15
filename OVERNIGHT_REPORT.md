@@ -49,6 +49,11 @@ One known gap, left on purpose: "RTX 4060+ free game" (a "+" stuck to the number
 | 31 | **"Galaxy S23" matched the S23 FE** (a cheaper model). "FE" is only ignored for graphics cards, where it means Founders Edition | Fixed |
 | 32 | Walmart could alert on out-of-stock items; login tracker could grow without limit; muted/hidden listings still counted in the watch list; a few others | Fixed |
 
+## 🔤 Forgiving search (added in the morning)
+- **Loose searches work:** "RAM DDR4" finds DDR4 listings even when the title says "Desktop Memory" instead of "RAM". Same for gpu, cpu, ssd, psu, mobo, monitor, laptop and a few others.
+- **Small typos are OK** in names and brands: "corsiar vengance", "nvidea", "rysen", "logitec" all find the right item.
+- **Still strict where it matters:** model numbers must be right (4060 never shows 4070s), "Pro"/"Max"/"Ti" still pick the model, and a laptop with "16GB RAM" doesn't show up in a RAM search.
+
 ## ✨ New and improved (polish + visuals)
 - **🏆 "Lowest ever"** and **NEW** badges (new since your last visit; watches with new finds get a NEW tag too).
 - **"found 12 min ago · was $254.83"** on every listing, so price drops show at a glance.

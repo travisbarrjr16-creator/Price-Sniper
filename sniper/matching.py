@@ -71,9 +71,43 @@ _DESCRIPTIVE_RE = re.compile(
 _CROSS_KINDS = {"gpu": ("cpu",), "cpu": ("gpu",), "ram": ("gpu", "cpu"), "storage": ("gpu", "cpu")}
 
 
+# Everyday words people search with ("ram", "gpu") -> what store titles actually say.
+# Used for the search words only; matched against the (normalized) listing title.
+GENERIC_WORDS = {
+    "ram": r"ram|memory|ddr ?[2-5]|dimm|sodimm",
+    "memory": r"ram|memory|ddr ?[2-5]|dimm|sodimm",
+    "gpu": r"gpu|graphics card|video card|graphics|rtx|gtx|geforce|radeon|arc",
+    "graphics": r"gpu|graphics|video card|rtx|gtx|geforce|radeon",
+    "cpu": r"cpu|processor|ryzen|core i\d|core ultra|xeon|threadripper",
+    "processor": r"cpu|processor",
+    "ssd": r"ssd|nvme|solid state|m\.2",
+    "nvme": r"nvme|m\.2",
+    "hdd": r"hdd|hard drive|hard disk",
+    "psu": r"psu|power supply",
+    "mobo": r"mobo|motherboard|mainboard",
+    "motherboard": r"motherboard|mobo|mainboard",
+    "monitor": r"monitor|display|screen",
+    "laptop": r"laptop|notebook",
+    "notebook": r"notebook|laptop",
+    "tv": r"tv|television|smart tv",
+    "headphones": r"headphones?|headset|earbuds?",
+    "headset": r"headset|headphones?",
+}
+# Search words that say which kind of part it is, even without a model ("ram ddr4", "gpu 8gb")
+_QUERY_KINDS = {
+    "gpu": re.compile(r"\b(gpu|graphics card|video card)\b"),
+    "cpu": re.compile(r"\b(cpu|processor)\b"),
+    "ram": re.compile(r"\b(ram|memory)(?! card)\b"),
+    "storage": re.compile(r"\b(ssd|solid state|hard drive)\b"),
+    "psu": re.compile(r"\b(power supply)\b"),
+    "board": re.compile(r"\b(mobo)\b"),
+}
+
+
 def part_kind(query: str) -> str | None:
     q = normalize(query)
-    return next((k for k, rx in _PART_KINDS.items() if rx.search(q)), None)
+    return (next((k for k, rx in _PART_KINDS.items() if rx.search(q)), None)
+            or next((k for k, rx in _QUERY_KINDS.items() if rx.search(q)), None))
 
 
 def whole_system_reason(title: str, query: str) -> str | None:
@@ -129,22 +163,66 @@ def tokens(text: str) -> list[str]:
     return normalize(text).split()
 
 
+def _typo_distance(a: str, b: str, limit: int) -> int:
+    """Edits between two words (a swapped pair of letters counts as one), stopping early past `limit`."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    prev2, prev = None, list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        cur = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cost = a[i - 1] != b[j - 1]
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                cur[j] = min(cur[j], prev2[j - 2] + 1)
+        if min(cur) > limit:
+            return limit + 1
+        prev2, prev = prev, cur
+    return prev[-1]
+
+
+def close_spelling(word: str, candidates) -> bool:
+    """A misspelled name word ("corsiar", "nvidea", "rysen") that is clearly one of `candidates`.
+
+    Only plain letter words of 4+ letters: numbers and model codes must match exactly (4060 is not
+    4070), and short words like "pro"/"max"/"ti" decide the model, so they're never guessed.
+    """
+    if len(word) < 4 or not word.isalpha() or word in VARIANT_SUFFIXES:
+        return False
+    limit = 1 if len(word) < 8 else 2
+    for c in candidates:
+        if not c.isalpha() or c in VARIANT_SUFFIXES or abs(len(c) - len(word)) > limit:
+            continue
+        if len(word) <= 5 and c[0] != word[0]:
+            continue                       # "dell" isn't "bell"
+        if _typo_distance(word, c, limit) <= limit:
+            return True
+    return False
+
+
 def missing_query_word(text: str, query: str) -> str | None:
     """The first search word that isn't in `text`, or None if they're all there.
 
     A word matches if it appears as written ("ddr5", "6400mhz" ~ "6400"), or if its letter/number
     parts appear right next to each other ("rtx4060" ~ "RTX 4060"). Parts scattered around the
-    title don't count, so "DDR5" doesn't match "DDR4 ... Z5".
+    title don't count, so "DDR5" doesn't match "DDR4 ... Z5". Everyday words count when the title
+    says the same thing ("ram" ~ "DDR4 Desktop Memory"), and name words may be misspelled a little.
     """
-    split = [_core(w) for w in normalize(text).split()]
+    norm = normalize(text)
+    split = [_core(w) for w in norm.split()]
     raw = {_core(w) for w in _raw_words(text)} | set(split)
     for word in _raw_words(query):
         if _core(word) in raw:
             continue
         parts = [_core(p) for p in normalize(word).split()]
         n = len(parts)
-        if not parts or not any(split[i:i + n] == parts for i in range(len(split) - n + 1)):
-            return word
+        if parts and any(split[i:i + n] == parts for i in range(len(split) - n + 1)):
+            continue
+        if word in GENERIC_WORDS and re.search(rf"(?<![a-z0-9])({GENERIC_WORDS[word]})(?![a-z0-9])", norm):
+            continue
+        if close_spelling(word, raw):
+            continue
+        return word
     return None
 
 
