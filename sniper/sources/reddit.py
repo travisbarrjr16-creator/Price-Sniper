@@ -156,8 +156,15 @@ class RedditSource(Source):
         return {"Authorization": f"Bearer {self._token}", "User-Agent": self.user_agent}
 
     async def _search(self, client, headers, sub: str, q: str) -> list[dict]:
-        r = await client.get(f"{API}/r/{sub}/search", headers=headers,
-                             params={"q": q, "restrict_sr": "1", "sort": "new", "t": "week", "limit": "50"})
+        params = {"q": q, "restrict_sr": "1", "sort": "new", "t": "week", "limit": "50"}
+        r = await client.get(f"{API}/r/{sub}/search", headers=headers, params=params)
+        if r.status_code == 401:            # token expired/revoked early: fresh token, retry once
+            self._token = None
+            headers.update(await self._auth(client))
+            r = await client.get(f"{API}/r/{sub}/search", headers=headers, params=params)
+        if r.status_code == 429:
+            wait = r.headers.get("x-ratelimit-reset") or r.headers.get("retry-after") or "?"
+            raise RuntimeError(f"Reddit says slow down (rate limited); try again in about {wait}s")
         r.raise_for_status()
         return [c["data"] for c in r.json().get("data", {}).get("children", [])]
 
