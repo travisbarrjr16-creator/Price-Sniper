@@ -52,6 +52,11 @@ header h1 { font-size: 16px; margin: 0; }
 header .status { color: var(--muted); font-size: 12px; margin-left: auto; text-align: right; }
 .layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 16px; max-width: 1280px; margin: 0 auto; }
 @media (max-width: 820px) { .layout { grid-template-columns: minmax(0, 1fr); } main { order: -1; } }
+/* phones: the watch list and form sit below the results, so give a shortcut to both up top */
+.mnav { display: none; gap: 8px; margin-bottom: 12px; }
+.mnav select { flex: 1; min-width: 0; min-height: 40px; }
+.mnav button { white-space: nowrap; min-height: 40px; }
+@media (max-width: 820px) { .mnav { display: flex; } }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); margin: 0 0 10px; }
 label { display: block; font-size: 12px; color: var(--text-2); margin: 8px 0 3px; }
@@ -476,6 +481,11 @@ async function renderMainInner(w) {
   const ref = hist.reference;
 
   $("#main").innerHTML = `
+    <div class="mnav" role="navigation" aria-label="Watches">
+      <label for="mnavSel" class="sr">Switch watch</label>
+      <select id="mnavSel">${state.watches.map(x => `<option value="${x.id}" ${x.id === w.id ? "selected" : ""}>${esc(x.query)}${x.active ? "" : " (paused)"} · ${money(x.lowest)}</option>`).join("")}</select>
+      <button type="button" id="mnavNew">＋ New watch</button>
+    </div>
     <div class="card">
       <div class="toolbar" style="justify-content:space-between">
         <div><div style="font-size:18px;font-weight:650">${esc(w.query)}</div>
@@ -535,6 +545,8 @@ async function renderMainInner(w) {
   $("#sh").onchange = e => { state.showHidden = e.target.checked; renderMain(); };
   if ($("#sm")) $("#sm").onchange = e => { state.showMine = e.target.checked; renderMain(); };
   $("#dup").onclick = () => duplicateWatch(w);
+  $("#mnavSel").onchange = e => { state.sel = +e.target.value; state.site = ""; renderWatches(); renderMain(); };
+  $("#mnavNew").onclick = () => { $("#f").scrollIntoView({behavior: "smooth", block: "start"}); $("#f").query.focus({preventScroll: true}); };
   $("#edit").onclick = () => editWatch(w);
   document.querySelectorAll("[data-hide]").forEach(b => b.onclick = async () => {
     const {hide, value, label} = b.dataset;
