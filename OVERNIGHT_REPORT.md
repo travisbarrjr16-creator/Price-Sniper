@@ -3,9 +3,14 @@
 Everything below is on the **`overnight-improvements`** branch. Your `main` version is untouched.
 If you like it, tell Claude "merge the overnight branch" (or merge it on GitHub). If not, nothing changes.
 
-**At a glance:** 46 commits · 49 files changed · tests went from 54 → **90** (all passing) · zero accessibility violations · zero errors in a long unattended run.
+**At a glance:** 64 commits · 51 files changed · tests went from 54 → **192** (all passing, on Python 3.11 and 3.13) · zero accessibility violations · zero errors in a 66-minute unattended run (34 alerts, 2 daily backups, every check on time).
 
 ---
+
+## 🔁 How it was checked
+Besides the tests, a separate reviewer went over all of tonight's changes **four times**, trying real listing titles against the matcher. Each round found things (including mistakes in my own new filters), and every finding was fixed and turned into a test. Round four's verdict: the matching rules now "look solid" for GPUs, CPUs, RAM, SSDs, phones, consoles and monitors. Its 90 realistic titles are now a permanent test (`tests/test_matching_corpus.py`): if a real listing is ever matched wrong, add its title there.
+
+One known gap, left on purpose: "RTX 4060+ free game" (a "+" stuck to the number) is treated like a "Plus" model and skipped. Fixing it would make "Galaxy S24+" match plain S24 searches, which is worse.
 
 ## 🐛 Bugs fixed
 
@@ -41,7 +46,8 @@ If you like it, tell Claude "merge the overnight branch" (or merge it on GitHub)
 | 28 | **More matching edge cases from a second review**: Ryzen 8000G "Radeon 780M Graphics" rejected as a GPU bundle; "5800X" matched the pricier 5800X3D; used posts saying "pulled from a prebuilt" or "PC & laptop" rejected as whole PCs; "iPhone 15 Pro, Max battery health" read as a Pro Max. A third review then caught "Gaming Laptop PC", "iPhone 15 Plus" and "Pro-Max" slipping through | All fixed, each with a test |
 | 29 | **"Metal Backplate" in a card's title got it rejected as junk** | Only backplates sold by themselves are rejected |
 | 30 | **"Database is locked"** possible when running an admin/update command while the app runs | Database switched to SQLite's WAL mode |
-| 31 | Walmart could alert on out-of-stock items; login tracker could grow without limit; muted/hidden listings still counted in the watch list; a few others | Fixed |
+| 31 | **"Galaxy S23" matched the S23 FE** (a cheaper model). "FE" is only ignored for graphics cards, where it means Founders Edition | Fixed |
+| 32 | Walmart could alert on out-of-stock items; login tracker could grow without limit; muted/hidden listings still counted in the watch list; a few others | Fixed |
 
 ## ✨ New and improved (polish + visuals)
 - **🏆 "Lowest ever"** and **NEW** badges (new since your last visit; watches with new finds get a NEW tag too).
@@ -80,6 +86,9 @@ Also checked: everything installs and passes on **Python 3.11** (the version on 
 - Phone push via ntfy, and Gmail sign-in.
 - The **Windows** script was syntax-checked and passed Microsoft's PowerShell analyzer, but was never run on Windows.
 - Auto-start (systemd / launchd / Task Scheduler) on a real machine.
+
+## 📝 Docs
+- README now explains the daily backups and **how to restore one**.
 
 ## 🙋 Decisions for you
 1. **Merge the overnight branch into main?**
