@@ -413,3 +413,54 @@ def test_limit_override_and_usage_api(tmp_path, monkeypatch):
     r = c.post("/api/watches", json={"query": "RTX 4070", "interval_minutes": 5})
     assert r.status_code == 429 and "every 15 minutes" in r.json()["detail"]
     assert c.post("/api/watches", json={"query": "RTX 4070", "interval_minutes": 15}).status_code == 200
+
+
+def test_loop_survives_a_broken_watch(tmp_path):
+    """A watch that crashes must not block the others or retry immediately."""
+    db = DB(str(tmp_path / "l.db"))
+    good_src = FakeSource()
+    good_src.items = [L("RTX 4060 a", 250, shipping=0, condition="new")]
+    broken = db.create_watch(Watch(query="RTX 4060"))
+    good = db.create_watch(Watch(query="RTX 4060"))
+    watcher = Watcher(db, sources=[good_src])
+    real_check = watcher.check
+
+    async def check(w):
+        if w.id == broken.id:
+            raise RuntimeError("boom")
+        return await real_check(w)
+    watcher.check = check
+
+    async def one_pass():
+        task = asyncio.create_task(watcher._loop())
+        await asyncio.sleep(0.5)
+        task.cancel()
+    asyncio.run(one_pass())
+    assert db.get_watch(good.id).last_checked_at is not None          # the good watch still ran
+    b = db.get_watch(broken.id)
+    assert b.last_checked_at is not None and "boom" in b.last_error   # error recorded...
+    assert not Watcher._due(b)                                       # ...and it waits its interval
+
+
+def test_several_finds_make_one_phone_notification(tmp_path):
+    db = DB(str(tmp_path / "d.db"))
+    src = FakeSource()
+    src.items = [L("RTX 4060 a", 300, shipping=0, condition="new")]
+    w = db.create_watch(Watch(query="RTX 4060", max_price=290, target_price=200))
+    pushes = []
+
+    class Rec:
+        async def send(self, client, title, msg, url, urgent=False, **kw):
+            pushes.append((title, msg, url, urgent))
+
+    watcher = Watcher(db, notifier=Rec(), sources=[src])
+    asyncio.run(watcher.check(w))
+    src.items += [L("RTX 4060 b", 280, shipping=0, condition="new", source_id="b"),
+                  L("RTX 4060 c", 270, shipping=0, condition="new", source_id="c"),
+                  L("RTX 4060 d", 190, shipping=0, condition="new", source_id="d")]
+    asyncio.run(watcher.check(db.get_watch(w.id)))
+    assert len(db.list_alerts()) == 3                 # all three saved for the app
+    assert len(pushes) == 1                           # but the phone buzzes once
+    title, msg, url, urgent = pushes[0]
+    assert title.startswith("3 deals · RTX 4060 · from $190.00")
+    assert msg.startswith("🎯 hit your $200 target: $190.00") and url.endswith("RTX 4060 d") and urgent

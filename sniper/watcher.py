@@ -64,11 +64,25 @@ class Watcher:
     async def _loop(self) -> None:
         while True:
             try:
-                for w in self.db.list_watches():
-                    if w.active and self._due(w):
-                        await self.check(w)
+                watches = self.db.list_watches()
             except Exception:
-                log.exception("watch loop error")
+                log.exception("could not load watches")
+                watches = []
+            for w in watches:
+                if not (w.active and self._due(w)):
+                    continue
+                try:
+                    await self.check(w)
+                except Exception as e:
+                    # One broken watch must not block the others, or retry every 20s and burn API quota:
+                    # record the error and wait for its normal interval.
+                    log.exception("watch %s failed", w.id)
+                    w.last_checked_at = utcnow().isoformat()
+                    w.last_error = f"Check failed: {type(e).__name__}: {e}"[:300]
+                    try:
+                        self.db.update_watch(w)
+                    except Exception:
+                        log.exception("could not record failure for watch %s", w.id)
             await asyncio.sleep(20)
 
     @staticmethod
@@ -157,8 +171,8 @@ class Watcher:
                     med, n = scoring.median_of(totals)
                     self.db.add_snapshot(watch.id, ts, bucket, min(totals), med, n)
 
-            for s, reason, urgent in alerts:
-                await self._send_alert(client, watch, s, reason, urgent)
+            if alerts:
+                await self._send_alerts(client, watch, alerts)
 
         watch.last_checked_at = ts
         watch.last_error = "; ".join(errors) or None
@@ -231,20 +245,34 @@ class Watcher:
                 prev_lowest = s.total_cost
         return out[:5]
 
-    async def _send_alert(self, client, watch: Watch, s: ScoredListing, reason: str, urgent: bool = False) -> None:
-        l = s.listing
+    async def _send_alerts(self, client, watch: Watch, alerts: list[tuple[ScoredListing, str, bool]]) -> None:
+        """Every alert is saved for the app; the phone gets ONE notification per check, led by the most
+        important deal (target hits and new lows first), so several finds don't mean several buzzes."""
+        for s, reason, _ in alerts:
+            self.db.add_alert(watch.id, s.listing.key, reason, s.listing.title, s.total_cost, s.listing.url)
+            self.db.set_alerted(watch.id, s.listing.key, s.total_cost)
+
+        ranked = sorted(alerts, key=lambda a: (not a[2], a[0].total_cost))   # urgent first, then cheapest
+        top, reason, _ = ranked[0]
+        urgent = any(u for _, _, u in alerts)
+        l = top.listing
         where = f"{l.distance_miles:g} mi away" if l.local_pickup and l.distance_miles is not None else l.source
-        deal = f" · {s.deal['pct_vs_median']:+.0f}% vs typical" if s.deal else ""
-        title = f"${s.total_cost:.2f} · {watch.query}"
-        msg = f"{reason}\n{l.title}\n{l.condition.replace('_', ' ')} · {where}{deal}"
-        self.db.add_alert(watch.id, l.key, reason, l.title, s.total_cost, l.url)
-        self.db.set_alerted(watch.id, l.key, s.total_cost)
+        deal = f" · {top.deal['pct_vs_median']:+.0f}% vs typical" if top.deal else ""
+        if len(ranked) == 1:
+            title = f"${top.total_cost:.2f} · {watch.query}"
+            msg = f"{reason}\n{l.title}\n{l.condition.replace('_', ' ')} · {where}{deal}"
+        else:
+            title = f"{len(ranked)} deals · {watch.query} · from ${min(a[0].total_cost for a in ranked):.2f}"
+            others = [f"• ${a[0].total_cost:.2f} {a[1]}" for a in ranked[1:4]]
+            more = f"\n+{len(ranked) - 4} more in the app" if len(ranked) > 4 else ""
+            msg = f"{reason}: ${top.total_cost:.2f} {l.title} ({where}{deal})\n" + "\n".join(others) + more
+
         user = self.db.get_user(watch.user_id) if watch.user_id else None
         if user and user.in_quiet_hours(utcnow()) and not (urgent and user.quiet_allow_urgent):
-            log.info("quiet hours for user %s: alert kept in app, no push", user.id)
+            log.info("quiet hours for user %s: %d alert(s) kept in app, no push", user.id, len(ranked))
             return
         await self.notifier.send(
-            client, title, msg, l.url, urgent=urgent,
+            client, title, msg, l.url, urgent=urgent,       # tapping opens the top deal
             ntfy_topic=user.ntfy_topic if user else None,
             discord_webhook=user.discord_webhook if user else None,
         )

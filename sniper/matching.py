@@ -63,11 +63,11 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
             return False, f"missing '{qt}'"
 
     for term in watch.required_terms:
-        if not _has_term(title, term):
+        if normalize(term) and not _has_term(title, term):
             return False, f"missing required '{term}'"
 
     for term in watch.excluded_terms:
-        if _has_term(title, term):
+        if normalize(term) and _has_term(title, term):     # a blank term must not exclude everything
             return False, f"excluded '{term}'"
 
     for phrase in JUNK_PHRASES:

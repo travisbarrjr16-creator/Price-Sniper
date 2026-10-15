@@ -225,17 +225,17 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
         <label>Item (model / SKU)</label>
         <input name="query" placeholder="RTX 4060" required>
         <div class="row">
-          <div><label>Max total $</label><input name="max_price" type="number" step="1" placeholder="290"></div>
-          <div><label title="Urgent alert when a listing hits this price">🎯 Target $</label><input name="target_price" type="number" step="1" placeholder="250"></div>
+          <div><label>Max total $</label><input name="max_price" type="number" step="1" min="1" placeholder="290"></div>
+          <div><label title="Urgent alert when a listing hits this price">🎯 Target $</label><input name="target_price" type="number" step="1" min="1" placeholder="250"></div>
         </div>
-        <label>Check every (min)</label><input name="interval_minutes" type="number" value="15" min="5">
+        <label>Check every (min)</label><input name="interval_minutes" type="number" value="15" min="5" max="10080">
         <label>Condition</label>
         <div class="checks" id="conds"></div>
         <label>Sites</label>
         <div class="checks" id="srcs"></div>
         <div class="row">
-          <div><label>ZIP (for local)</label><input name="zip_code" placeholder="78701"></div>
-          <div><label>Radius (mi)</label><input name="radius_miles" type="number" placeholder="40"></div>
+          <div><label>ZIP (for local)</label><input name="zip_code" placeholder="78701" inputmode="numeric" pattern="\d{5}" maxlength="5" title="5-digit ZIP code"></div>
+          <div><label>Radius (mi)</label><input name="radius_miles" type="number" min="1" max="500" placeholder="40"></div>
         </div>
         <details>
           <summary>Smart filters & tax</summary>
@@ -277,7 +277,16 @@ try { state.sort = localStorage.getItem("sort") || "total"; } catch {}
 const api = async (path, opts = {}) => {
   const r = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opts});
   if (r.status === 401 && !path.startsWith("/api/auth")) { showAuth(); throw new Error("Please sign in"); }
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  if (!r.ok) {
+    const detail = (await r.json().catch(() => ({}))).detail;
+    // validation errors come back as a list: turn them into one readable sentence
+    const NAMES = {query: "Item", max_price: "Max total", target_price: "Target", zip_code: "ZIP", radius_miles: "Radius",
+                   interval_minutes: "Check every", conditions: "Condition", tax_rate: "Sales tax", email: "Email", password: "Password"};
+    const msg = Array.isArray(detail)
+      ? detail.map(d => `${NAMES[d.loc?.[d.loc.length - 1]] || d.loc?.[d.loc.length - 1] || "Input"}: ${(d.msg || "").replace(/^Value error, /, "")}`).join(" · ")
+      : detail;
+    throw new Error(msg || r.statusText);
+  }
   return r.json();
 };
 
@@ -299,6 +308,7 @@ $("#f").addEventListener("submit", async e => {
     sources: (() => { const all = [...document.querySelectorAll("#srcs input")], on = all.filter(i => i.checked);
       return on.length === all.length ? [] : on.map(i => i.value); })(),
   };
+  if (!body.conditions.length) { alert("Tick at least one condition (New, Used, …)."); return; }
   const btn = $("#add"); btn.disabled = true; btn.textContent = "Searching…";
   try {
     const w = await api("/api/watches", {method: "POST", body: JSON.stringify(body)});
@@ -309,11 +319,15 @@ $("#f").addEventListener("submit", async e => {
   btn.disabled = false; btn.textContent = "Start watching";
 });
 
+const EMPTY_MAIN = '<div class="card empty">Create a watch to start sniping. Results from every source land here, sorted by what you\'d actually pay.</div>';
+
 async function refresh() {
   state.watches = await api("/api/watches");
-  if (!state.sel && state.watches.length) state.sel = state.watches[0].id;
+  // the selected watch may have been deleted (here or in another tab)
+  if (!state.watches.some(w => w.id === state.sel)) { state.sel = state.watches[0]?.id ?? null; state.site = ""; }
   renderWatches();
   if (state.sel) await renderMain();
+  else $("#main").innerHTML = EMPTY_MAIN;
 }
 
 function renderWatches() {
@@ -383,8 +397,16 @@ async function renderMain() {
     </div>`;
 
   $("#chk").onclick = async e => { e.target.disabled = true; e.target.textContent = "Checking…"; await api(`/api/watches/${w.id}/check`, {method: "POST"}).catch(x => alert(x.message)); refresh(); };
-  $("#pause").onclick = async () => { await api(`/api/watches/${w.id}`, {method: "PUT", body: JSON.stringify({...w, active: !w.active})}); refresh(); };
-  $("#del").onclick = async () => { if (confirm(`Stop watching "${w.query}"?`)) { await api(`/api/watches/${w.id}`, {method: "DELETE"}); state.sel = null; refresh(); } };
+  $("#pause").onclick = async () => {
+    try { await api(`/api/watches/${w.id}`, {method: "PUT", body: JSON.stringify({...w, active: !w.active})}); }
+    catch (x) { alert(x.message); }          // e.g. resuming would go over a site's daily limit
+    refresh();
+  };
+  $("#del").onclick = async () => {
+    if (!confirm(`Stop watching "${w.query}"?`)) return;
+    await api(`/api/watches/${w.id}`, {method: "DELETE"}).catch(() => {});   // already gone is fine
+    state.sel = null; refresh();
+  };
   $("#sort").querySelectorAll("button").forEach(b => b.onclick = () => { state.sort = b.dataset.k; try { localStorage.setItem("sort", state.sort); } catch {} renderMain(); });
   $("#sh").onchange = e => { state.showHidden = e.target.checked; renderMain(); };
   if ($("#sm")) $("#sm").onchange = e => { state.showMine = e.target.checked; renderMain(); };
@@ -579,8 +601,10 @@ $("#authForm").addEventListener("submit", async e => {
 });
 $("#logoutBtn").onclick = async () => {
   await api("/api/auth/logout", {method: "POST"}).catch(() => {});
-  state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: ""};
-  $("#main").innerHTML = ""; showAuth();
+  state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: "", showMine: false, showHidden: false};
+  $("#main").innerHTML = EMPTY_MAIN; $("#watches").innerHTML = '<div class="empty">Nothing yet.</div>';
+  setAuthMode(false);        // come back to "Sign in", not "Create account"
+  showAuth();
 };
 
 function renderGmail() {

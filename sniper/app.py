@@ -12,12 +12,13 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from . import budget, maintenance, scoring
 from .alerts import valid_discord_webhook, valid_ntfy_topic
@@ -32,18 +33,47 @@ STATIC = Path(__file__).parent / "static"
 COOKIE = "sniper_session"
 
 
+WatchId = Annotated[int, PathParam(ge=1, le=2**62)]   # huge ids would overflow SQLite
+
+
 class WatchIn(BaseModel):
     query: str = Field(min_length=2, max_length=120)
-    max_price: Optional[float] = None
-    target_price: Optional[float] = None
-    conditions: list[str] = ["new", "open_box", "refurbished", "used"]
+    max_price: Optional[float] = Field(None, gt=0, le=1_000_000)
+    target_price: Optional[float] = Field(None, gt=0, le=1_000_000)
+    conditions: list[str] = Field(["new", "open_box", "refurbished", "used"], min_length=1)
     zip_code: Optional[str] = Field(None, max_length=10)
-    radius_miles: Optional[int] = None
-    required_terms: list[str] = []
-    excluded_terms: list[str] = []
+    radius_miles: Optional[int] = Field(None, ge=1, le=500)
+    required_terms: list[str] = Field([], max_length=20)
+    excluded_terms: list[str] = Field([], max_length=50)
     sources: list[str] = []
     tax_rate: float = Field(0.0, ge=0, le=0.25)
-    interval_minutes: int = Field(15, ge=5)
+    interval_minutes: int = Field(15, ge=5, le=10080)
+
+    @field_validator("query")
+    @classmethod
+    def _clean_query(cls, v: str) -> str:
+        v = " ".join(v.split())          # collapse tabs/newlines/extra spaces
+        if len(v) < 2:
+            raise ValueError("enter at least 2 characters")
+        return v
+
+    @field_validator("zip_code")
+    @classmethod
+    def _zip(cls, v: Optional[str]) -> Optional[str]:
+        v = (v or "").strip()
+        if not v:
+            return None
+        if not re.fullmatch(r"\d{5}", v):
+            raise ValueError("ZIP code must be 5 digits")
+        return v
+
+    @field_validator("required_terms", "excluded_terms")
+    @classmethod
+    def _terms(cls, v: list[str]) -> list[str]:
+        out = [" ".join(t.split()) for t in v]
+        if any(len(t) > 60 for t in out):
+            raise ValueError("each word or phrase must be 60 characters or less")
+        return [t for t in out if t]     # drop blanks
     strict_variants: bool = True
     hide_risky: bool = True
     include_auctions: bool = False
@@ -311,7 +341,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         return db.get_watch(w.id).to_dict()
 
     @app.put("/api/watches/{wid}")
-    def update_watch(wid: int, body: WatchIn, user: User = Depends(current_user)):
+    def update_watch(wid: WatchId, body: WatchIn, user: User = Depends(current_user)):
         _validate(body)
         w = _get(wid, user)
         for k, v in body.model_dump().items():
@@ -321,17 +351,17 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         return db.update_watch(w).to_dict()
 
     @app.delete("/api/watches/{wid}")
-    def delete_watch(wid: int, user: User = Depends(current_user)):
+    def delete_watch(wid: WatchId, user: User = Depends(current_user)):
         _get(wid, user)
         db.delete_watch(wid)
         return {"ok": True}
 
     @app.post("/api/watches/{wid}/check")
-    async def check_now(wid: int, user: User = Depends(current_user)):
+    async def check_now(wid: WatchId, user: User = Depends(current_user)):
         return await watcher.check(_get(wid, user))
 
     @app.get("/api/watches/{wid}/listings")
-    def listings(wid: int, sort: str = "total", include_hidden: bool = False, include_dismissed: bool = False,
+    def listings(wid: WatchId, sort: str = "total", include_hidden: bool = False, include_dismissed: bool = False,
                  site: str = "", user: User = Depends(current_user)):
         w = _get(wid, user)
         muted, dismissed = db.hidden_sets(user.id)
@@ -373,7 +403,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         return {"items": items, "sites": dict(sorted(sites.items())), "hidden_by_you": hidden_by_you}
 
     @app.get("/api/watches/{wid}/history")
-    def history(wid: int, days: int = HISTORY_DAYS, user: User = Depends(current_user)):
+    def history(wid: WatchId, days: int = HISTORY_DAYS, user: User = Depends(current_user)):
         _get(wid, user)
         since = (utcnow() - timedelta(days=days)).isoformat()
         out = {}
