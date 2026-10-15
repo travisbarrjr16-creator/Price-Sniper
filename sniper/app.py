@@ -142,6 +142,27 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         await watcher.stop()
 
     app = FastAPI(title="Price Sniper", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def protect(request: Request, call_next):
+        # Requests that change things must come from this app's own pages, not another website
+        # (defense in depth on top of SameSite cookies and the JSON-only API).
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            origin = request.headers.get("origin")
+            if origin and origin.split("://", 1)[-1] != request.headers.get("host", ""):
+                allowed = public_url().split("://", 1)[-1]
+                if origin.split("://", 1)[-1] != allowed:
+                    return Response("cross-site request blocked", status_code=403)
+        response = await call_next(request)
+        h = response.headers
+        h.setdefault("X-Content-Type-Options", "nosniff")
+        h.setdefault("X-Frame-Options", "DENY")                 # can't be framed by other sites
+        h.setdefault("Referrer-Policy", "no-referrer")          # stores don't see your app's address when you tap Open
+        h.setdefault("Content-Security-Policy",
+                     "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; "
+                     "script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
+                     "form-action 'self'")
+        return response
     app.state.db, app.state.watcher = db, watcher
 
     # --- maintenance notice (public: shows on the sign-in screen too) --------

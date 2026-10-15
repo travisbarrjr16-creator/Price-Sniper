@@ -637,3 +637,26 @@ def test_failed_push_is_reported(tmp_path, monkeypatch):
     r = c.post("/api/me/test-alert")
     assert r.status_code == 502 and "rate limited" in r.json()["detail"]
     assert "rate limited" in c.get("/api/me").json()["push_error"]["errors"]["ntfy"]
+
+
+def test_security_headers_and_cross_site_block(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.get("/")
+    assert r.headers["x-frame-options"] == "DENY" and "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    assert r.headers["referrer-policy"] == "no-referrer"
+    evil = c.post("/api/auth/signup", json={"email": "x@example.com", "password": "supersecret1"},
+                  headers={"Origin": "https://evil.example"})
+    assert evil.status_code == 403
+    ok = c.post("/api/auth/signup", json={"email": "x@example.com", "password": "supersecret1"},
+                headers={"Origin": "http://testserver"})
+    assert ok.status_code == 200
+
+
+def test_non_web_links_are_dropped(tmp_path):
+    db = DB(str(tmp_path / "u.db"))
+    src = FakeSource()
+    src.items = [L("RTX 4060 a", 250, shipping=0, condition="new"),
+                 Listing(source="Test", source_id="evil", title="RTX 4060 evil", url="javascript:alert(1)", price=200)]
+    w = db.create_watch(Watch(query="RTX 4060"))
+    stats = asyncio.run(Watcher(db, sources=[src]).check(w))
+    assert stats["fetched"] == 1 and all(r["key"] != "Test:evil" for r in db.get_listing_rows(w.id))

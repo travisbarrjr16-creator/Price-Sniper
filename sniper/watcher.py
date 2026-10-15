@@ -153,7 +153,8 @@ class Watcher:
                 else:
                     for l in res:
                         l.source_key = s.key
-                    raw.extend(res)
+                    # only real web links: a "javascript:" or other odd URL must never become an Open button
+                    raw.extend(l for l in res if str(l.url).lower().startswith(("https://", "http://")))
 
             # Strict matching
             rejected = Counter()
