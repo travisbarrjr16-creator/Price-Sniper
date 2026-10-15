@@ -74,7 +74,7 @@ user's searches use them.
 | **Walmart** (Affiliate API) | Walmart.com + marketplace sellers; "Restored" = refurb | [walmart.io](https://walmart.io) account; `python -m sniper.admin walmart-keys` makes the key pair to upload → `WALMART_CONSUMER_ID`. Steps in [SITE_KEYS.md](SITE_KEYS.md). *Unconfirmed whether new sign-ups are still approved.* |
 | **Reddit** (official API) | **r/buildapcsales** retailer deals (price from the title) and **r/hardwareswap** used parts. For r/hardwareswap, only selling posts are used, the price comes from the post body, and the seller's "Trades: N" counts as feedback | [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps), create a *script* app → `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` |
 | **Reverb** | Music gear, some electronics; new/used | Personal token in reverb.com settings → `REVERB_TOKEN` |
-| **Etsy** (Open API v3) | Handmade/vintage; shipping is estimated | [etsy.com/developers](https://www.etsy.com/developers) → `ETSY_API_KEY` (+ `ETSY_SHARED_SECRET`) |
+| **Etsy** (Open API v3) | Handmade/vintage; shipping is estimated | [etsy.com/developers](https://www.etsy.com/developers) → `ETSY_API_KEY` + `ETSY_SHARED_SECRET` (both required since Jan 2026) |
 | **Email alerts** (Gmail, read-only) | **Craigslist, OfferUp, Mercari, FB Marketplace, Swappa**, through their saved-search alert emails | See below |
 | **Demo** | Simulated | On automatically when nothing else is configured |
 
