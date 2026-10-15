@@ -37,6 +37,8 @@ the whole flow right away.
 
 - **Badges:** 🏆 *Lowest ever* (the lowest total this watch has seen), **NEW** (found since your last visit; watches with new finds get a NEW tag too), "found 12 min ago · was $X".
 - **Compact view** and an instant **"Search these results"** box above the listings.
+- **Edit** a watch in place (its price history is kept). Changing the max or target re-checks known listings once.
+- **🔔 Recent alerts** in the top bar, with an unread count, so you can see alerts you missed.
 - **Chart:** dashed lines for your max and 🎯 target.
 - **Install it like an app:** on a phone, open the site and use *Share → Add to Home Screen* (iPhone) or *Install app* (Android).
 - **Settings:** *Generate* a safe ntfy topic, **🔔 Send test notification**, failed deliveries are shown, *Delete my account*. There's also a [privacy page](sniper/static/privacy.html) at `/privacy`.

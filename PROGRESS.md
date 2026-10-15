@@ -54,6 +54,7 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
 - Reliability: Gmail "Reconnect" prompt (7-day expiry), 60s per-site time limit, relist detection, only one process runs the checks, failed push deliveries are reported, daily cleanup + backups, pinned library versions.
 - Visual: installable app icon, NEW / Lowest-ever badges, "found … ago · was $X", site initials, first-run screen with examples, chart max/target lines, compact view, search box, no sideways scrolling on any phone size.
 - Settings: Generate ntfy topic, test notification, privacy page, delete account.
+- Later in the night: Edit watch, 🔔 recent-alerts list, security headers + cross-site block, http(s)-only links, zero accessibility (axe/WCAG 2.2) violations, Reddit User-Agent format, Windows scripts checked with PSScriptAnalyzer.
 
 ### PC-part searches
 - Matching ignores units and spelling: "DDR5 2x16 6400" finds "32GB (2x16GB) DDR5-6400MHz", "2 x 16GB … 6400 MT/s", etc.
