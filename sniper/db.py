@@ -249,6 +249,15 @@ class DB:
         with self.lock, self.conn:
             self.conn.execute("UPDATE users SET gmail_email=?, gmail_token=? WHERE id=?", (email, enc, uid))
 
+    def expire_gmail(self, uid: int) -> None:
+        """Keep the address (so the app can say "reconnect name@gmail.com") but drop the dead token."""
+        with self.lock, self.conn:
+            self.conn.execute("UPDATE users SET gmail_token=NULL WHERE id=?", (uid,))
+
+    def gmail_connected(self, uid: int) -> bool:
+        r = self._read_one("SELECT gmail_token FROM users WHERE id=?", (uid,))
+        return bool(r and r["gmail_token"])
+
     def get_gmail_token(self, uid: int) -> Optional[str]:
         r = self._read_one("SELECT gmail_token FROM users WHERE id=?", (uid,))
         return security.decrypt(r["gmail_token"]) if r and r["gmail_token"] else None

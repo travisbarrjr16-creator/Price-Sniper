@@ -610,6 +610,12 @@ $("#logoutBtn").onclick = async () => {
 function renderGmail() {
   const me = state.me, box = $("#gmailBox");
   if (!me.gmail_available) { box.innerHTML = '<div class="hint">Not set up on this server yet (the admin needs to add Google sign-in keys).</div>'; return; }
+  if (me.gmail_email && !me.gmail_connected) {
+    box.innerHTML = `<div class="email-warn" role="alert">⚠ Gmail connection expired
+        <small>Google ended the connection to <b>${esc(me.gmail_email)}</b> (it does this every 7 days while the app is in testing). Reconnect to keep getting listings from alert emails.</small></div>
+      <a class="open" href="/api/gmail/connect" style="display:inline-block;padding:6px 12px;border-radius:7px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Reconnect Gmail</a>`;
+    return;
+  }
   box.innerHTML = me.gmail_email
     ? `<div>Connected: <b>${esc(me.gmail_email)}</b> <button type="button" id="gmailOff">Disconnect</button></div>
        <div class="hint">Read-only. Turn on saved-search email alerts on those sites and matching listings show up here.</div>`

@@ -209,6 +209,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     @app.get("/api/me")
     def me(user: User = Depends(current_user)):
         return {**user.public(), "gmail_available": bool(gmail_source and gmail_source.configured()),
+                "gmail_connected": db.gmail_connected(user.id),
                 "invite_required": bool(os.getenv("SNIPER_INVITE_CODE"))}
 
     @app.put("/api/me")

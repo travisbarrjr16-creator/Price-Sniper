@@ -39,6 +39,8 @@ def parse_items(items: list[dict]) -> list[Listing]:
         price = it.get("salePrice") or it.get("msrp")
         if price is None:
             continue
+        if it.get("availableOnline") is False or str(it.get("stock", "")).lower() in ("not available", "out of stock"):
+            continue                    # don't alert on things you can't buy
         price = float(price)
         name = it.get("name", "")
         ship = it.get("standardShipRate")

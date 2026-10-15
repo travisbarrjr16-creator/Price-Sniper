@@ -153,7 +153,14 @@ class GmailAlertsSource(Source):
         refresh = self.db.get_gmail_token(watch.user_id)
         if not refresh:
             return []    # this user hasn't connected Gmail; not an error
-        auth = {"Authorization": f"Bearer {await access_token(client, refresh)}"}
+        try:
+            auth = {"Authorization": f"Bearer {await access_token(client, refresh)}"}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (400, 401) and "invalid_grant" in e.response.text:
+                # Google expired or revoked the connection (in "Testing" mode this happens every 7 days).
+                self.db.expire_gmail(watch.user_id)
+                raise RuntimeError("Gmail connection expired. Reconnect it in Settings") from None
+            raise
         words = " ".join(tokens(watch.query))
         q = f"newer_than:14d ({' OR '.join('from:' + s for s in SENDERS)}) {words}"
         r = await client.get(f"{GMAIL}/messages", headers=auth, params={"q": q, "maxResults": "25"})

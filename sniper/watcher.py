@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections import Counter
 from dataclasses import asdict
@@ -14,11 +15,18 @@ from .alerts import Notifier
 from .db import DB
 from .matching import match
 from .models import Listing, ScoredListing, Watch, utcnow
-from .sources import Source, enabled_sources, seller_key
+from .matching import normalize
+from .sources import Source, enabled_sources, seller_key, site_of
 
 log = logging.getLogger("sniper.watcher")
 
 HISTORY_DAYS = 30
+SITE_TIME_LIMIT = 60          # seconds one site's whole search may take before we move on
+RELIST_DAYS = 7               # same seller + same title + similar price within this = the same item
+
+
+def _fingerprint(source: str, seller: str | None, title: str) -> tuple | None:
+    return (site_of(source), seller.strip().lower(), normalize(title)) if seller else None
 
 
 def scored_to_dict(s: ScoredListing) -> dict:
@@ -202,7 +210,10 @@ class Watcher:
         try:
             async with httpx.AsyncClient(timeout=20, transport=self._transport,
                                          event_hooks={"request": [count]}) as client:
-                return await source.search(watch, client)
+                # a site that answers very slowly mustn't hold up everyone's checks
+                return await asyncio.wait_for(source.search(watch, client), SITE_TIME_LIMIT)
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"took longer than {SITE_TIME_LIMIT}s, skipped this check") from None
         finally:
             self.db.add_usage(source.key, calls)
 
@@ -224,8 +235,14 @@ class Watcher:
             return []
 
         out = []
+        relists = self._relist_index(existing)
         for s in sorted(visible, key=lambda s: s.total_cost):
             prev = existing.get(s.listing.key)
+            if prev is None:
+                # Ended and relisted under a new id? Treat it as the item we already know about.
+                old = relists.get(_fingerprint(s.listing.source, s.listing.seller_name, s.listing.title))
+                if old is not None and abs(s.total_cost - old["total"]) <= max(5.0, old["total"] * 0.05):
+                    prev = old
             is_new = prev is None
             alerted = prev["alerted_total"] if prev is not None else None
             dropped = prev is not None and s.total_cost < (alerted or prev["total"]) - 1
@@ -244,6 +261,18 @@ class Watcher:
             if beats:
                 prev_lowest = s.total_cost
         return out[:5]
+
+    @staticmethod
+    def _relist_index(existing: dict) -> dict:
+        cutoff = (utcnow() - timedelta(days=RELIST_DAYS)).isoformat()
+        index = {}
+        for r in existing.values():
+            if r["last_seen"] < cutoff:
+                continue
+            d = json.loads(r["data"])
+            if d.get("seller_name"):
+                index[_fingerprint(d["source"], d["seller_name"], d["title"])] = r
+        return index
 
     async def _send_alerts(self, client, watch: Watch, alerts: list[tuple[ScoredListing, str, bool]]) -> None:
         """Every alert is saved for the app; the phone gets ONE notification per check, led by the most

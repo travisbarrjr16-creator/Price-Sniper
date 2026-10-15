@@ -502,3 +502,44 @@ def test_whole_systems_and_bundles(query, title, ok):
     assert match(L(title), Watch(query=query))[0] is ok
     if not ok:      # turning off "exact model" lets them through
         assert match(L(title), Watch(query=query, strict_variants=False))[0]
+
+
+def test_relisted_item_is_not_new(tmp_path):
+    db = DB(str(tmp_path / "rl.db"))
+    src = FakeSource()
+    src.items = [L("RTX 4060 x", 280, shipping=0, condition="new", seller_name="Bob", source_id="old")]
+    w = db.create_watch(Watch(query="RTX 4060", max_price=290))
+    watcher = Watcher(db, sources=[src])
+    asyncio.run(watcher.check(w))                                   # first scan: summary alert
+    n = len(db.list_alerts())
+    src.items = [L("RTX 4060 x", 279, shipping=0, condition="new", seller_name="Bob", source_id="relisted")]
+    asyncio.run(watcher.check(db.get_watch(w.id)))
+    assert len(db.list_alerts()) == n                               # same seller/title/price: no "new listing" alert
+    src.items = [L("RTX 4060 x", 220, shipping=0, condition="new", seller_name="Bob", source_id="relisted2")]
+    asyncio.run(watcher.check(db.get_watch(w.id)))
+    assert len(db.list_alerts()) == n + 1                           # but a real price cut still alerts
+
+
+def test_slow_site_is_skipped_not_waited_on(tmp_path, monkeypatch):
+    import sniper.watcher as wmod
+    monkeypatch.setattr(wmod, "SITE_TIME_LIMIT", 0.2)
+
+    class Slow(FakeSource):
+        key, name = "slow", "SlowSite"
+
+        async def search(self, watch, client):
+            await asyncio.sleep(5)
+            return []
+    db = DB(str(tmp_path / "s.db"))
+    fast = FakeSource(); fast.items = [L("RTX 4060 a", 250, shipping=0, condition="new")]
+    w = db.create_watch(Watch(query="RTX 4060"))
+    stats = asyncio.run(Watcher(db, sources=[Slow(), fast]).check(w))
+    assert stats["matched"] == 1 and "SlowSite: took longer than" in stats["errors"][0]
+
+
+def test_walmart_skips_out_of_stock():
+    from sniper.sources.walmart import parse_items
+    items = parse_items([{"itemId": 1, "name": "RTX 4060", "salePrice": 280, "availableOnline": False},
+                         {"itemId": 2, "name": "RTX 4060", "salePrice": 290, "stock": "Not available"},
+                         {"itemId": 3, "name": "RTX 4060", "salePrice": 300, "availableOnline": True}])
+    assert [i.source_id for i in items] == ["3"]

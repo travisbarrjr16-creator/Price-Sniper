@@ -161,3 +161,26 @@ def test_ebay_listing_parse_and_headers():
     assert searches[-1].headers["x-ebay-c-enduserctx"] == "contextualLocation=country%3DUS%2Czip%3D78701"
     f = searches[-1].url.params["filter"]
     assert "priceCurrency:USD" in f and "buyingOptions:{FIXED_PRICE|BEST_OFFER}" in f and "conditionIds:{" in f
+
+
+def test_gmail_expired_connection_asks_to_reconnect(tmp_path, monkeypatch):
+    import asyncio
+    import httpx
+    from sniper.db import DB
+    from sniper.models import Watch
+    from sniper.sources.gmail import GmailAlertsSource
+    monkeypatch.setenv("SNIPER_SECRET_FILE", str(tmp_path / "s"))
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "id"); monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "sec")
+    db = DB(str(tmp_path / "g.db"))
+    u = db.create_user("a@example.com", "hunter2hunter2")
+    db.set_gmail(u.id, "deals@gmail.com", "refresh-1")
+    src = GmailAlertsSource(); src.db = db
+    transport = httpx.MockTransport(lambda r: httpx.Response(400, json={"error": "invalid_grant"}))
+
+    async def run():
+        async with httpx.AsyncClient(transport=transport) as c:
+            return await src.search(Watch(query="RTX 4060", user_id=u.id), c)
+    with pytest.raises(RuntimeError, match="Reconnect"):
+        asyncio.run(run())
+    assert not db.gmail_connected(u.id) and db.get_user(u.id).gmail_email == "deals@gmail.com"
+    assert asyncio.run(run()) == []         # afterwards it quietly skips instead of erroring every check
