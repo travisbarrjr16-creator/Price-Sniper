@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import logging
 from collections import Counter
 from dataclasses import asdict
@@ -10,7 +11,7 @@ from datetime import datetime, timedelta
 
 import httpx
 
-from . import budget, scoring
+from . import budget, housekeeping, scoring
 from .alerts import Notifier
 from .db import DB
 from .matching import match
@@ -70,7 +71,12 @@ class Watcher:
             self._task.cancel()
 
     async def _loop(self) -> None:
+        last_housekeeping = None
         while True:
+            today = utcnow().date()
+            if os.getenv("SNIPER_HOUSEKEEPING", "1") != "0" and last_housekeeping != today:
+                last_housekeeping = today
+                await asyncio.to_thread(housekeeping.daily, self.db)
             try:
                 watches = self.db.list_watches()
             except Exception:

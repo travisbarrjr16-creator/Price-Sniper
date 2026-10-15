@@ -543,3 +543,30 @@ def test_walmart_skips_out_of_stock():
                          {"itemId": 2, "name": "RTX 4060", "salePrice": 290, "stock": "Not available"},
                          {"itemId": 3, "name": "RTX 4060", "salePrice": 300, "availableOnline": True}])
     assert [i.source_id for i in items] == ["3"]
+
+
+def test_purge_and_backup(tmp_path, monkeypatch):
+    import tarfile
+    from datetime import timedelta
+    from sniper import housekeeping
+    from sniper.models import utcnow
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("EBAY_CLIENT_ID=x\n")
+    db = DB(str(tmp_path / "h.db"))
+    w = db.create_watch(Watch(query="RTX 4060"))
+    old = (utcnow() - timedelta(days=90)).isoformat()
+    db.upsert_listing(w.id, "gone-old", {}, 1, 1, "new", 0, old)
+    db.upsert_listing(w.id, "active-old", {}, 1, 1, "new", 0, old)
+    db.mark_inactive_except(w.id, {"active-old"})
+    db.add_snapshot(w.id, (utcnow() - timedelta(days=400)).isoformat(), "new", 1, 1, 1)
+    db.add_snapshot(w.id, utcnow().isoformat(), "new", 1, 1, 1)
+    counts = housekeeping.purge(db)
+    assert counts["listings"] == 1 and counts["snapshots"] == 1
+    assert [r["key"] for r in db.get_listing_rows(w.id, active_only=False)] == ["active-old"]   # still-listed items stay
+
+    for _ in range(3):
+        archive = housekeeping.backup(db, tmp_path / "backups", keep=2)
+    assert len(list((tmp_path / "backups").glob("*.tar.gz"))) == 2                 # old backups rotated out
+    with tarfile.open(archive) as tar:
+        assert {"sniper.db", ".env"} <= set(tar.getnames())
+    assert oct(archive.stat().st_mode)[-3:] == "600"

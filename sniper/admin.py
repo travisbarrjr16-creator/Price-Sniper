@@ -4,6 +4,7 @@
     python -m sniper.admin users                            # list accounts
     python -m sniper.admin walmart-keys                     # make the key pair walmart.io asks for
     python -m sniper.admin test-sources                     # try one real search on every site you set up
+    python -m sniper.admin backup                           # back up database + .env + keys now
 
 (Use .venv/bin/python on Mac/Linux or .venv\\Scripts\\python on Windows.)
 """
@@ -89,6 +90,7 @@ def main(argv: list[str] | None = None) -> None:
     w = sub.add_parser("walmart-keys", help="make the key pair walmart.io asks for")
     w.add_argument("--force", action="store_true", help="replace an existing key pair")
     sub.add_parser("test-sources", help="run one real search on every site that has keys")
+    sub.add_parser("backup", help="write a backup now (database + .env + keys) to backups/")
     args = ap.parse_args(argv)
 
     if args.cmd == "walmart-keys":
@@ -107,6 +109,11 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     db = DB()
+    if args.cmd == "backup":
+        from .housekeeping import backup
+        print(f"Backup written: {backup(db)}")
+        print("Copy the backups/ folder somewhere else (your PC, Google Drive...) now and then.")
+        return
     if args.cmd == "reset-link":
         user = db.find_user_by_email(args.email)
         if not user:
