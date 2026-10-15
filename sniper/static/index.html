@@ -110,6 +110,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
   border: 2px solid var(--orange-line); border-radius: 8px; background: var(--surface); }
 #notice .msg { display: block; font-weight: 650; font-size: 14px; margin-top: 6px; }
 #notice.down .count { display: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (prefers-reduced-motion: no-preference) {
   #notice.urgent { animation: noticePulse 1s ease-in-out infinite alternate; }
   @keyframes noticePulse { from { box-shadow: 0 0 0 0 var(--orange-line); } to { box-shadow: 0 0 0 6px transparent; } }
@@ -889,6 +890,10 @@ async function boot() {
   loadStatus(); refresh(); pollAlerts();
   state.timers.push(setInterval(pollAlerts, 20000));
   state.timers.push(setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60000));
+  if (!state.visHooked) {   // coming back to the tab/app: show fresh results now, not in up to a minute
+    state.visHooked = true;
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && state.me) { refresh(); pollAlerts(); } });
+  }
   const g = new URLSearchParams(location.search).get("gmail");
   if (g) { history.replaceState(null, "", "/"); if (g === "connected") $("#settingsBtn").click(); }
 }
@@ -945,16 +950,24 @@ async function checkNotice() {
 }
 function renderNotice() {
   const el = $("#notice"), now = Date.now();
-  if (!notice.deadline && !notice.down) { el.hidden = true; document.documentElement.style.removeProperty("--notice-h"); return; }
+  if (!notice.deadline && !notice.down) { el.hidden = true; notice.phase = null; document.documentElement.style.removeProperty("--notice-h"); return; }
   el.hidden = false;
   const left = Math.max(0, Math.ceil((notice.deadline - now) / 1000));
-  if (notice.down || left === 0) {
-    el.className = "down";
-    el.innerHTML = `<div class="head">🔧 Updating now…</div><span class="msg">This page will reload by itself when it's back.</span>`;
-  } else {
-    el.className = left <= 15 ? "urgent" : "";
+  const phase = notice.down || left === 0 ? "down" : left <= 15 ? "urgent" : "";
+  // Rebuild only when the phase changes; the ticking clock is hidden from screen
+  // readers (it would be read out every second) and they hear a few milestones instead.
+  if (notice.phase !== phase + notice.msg) {
+    notice.phase = phase + notice.msg;
+    el.className = phase;
+    el.innerHTML = phase === "down"
+      ? `<div class="head">🔧 Updating now…</div><span class="msg">This page will reload by itself when it's back.</span>`
+      : `<div class="head">⚠ App update in <span class="count" aria-hidden="true"></span><span class="sr"></span> Save what you're doing!</div><span class="msg">${esc(notice.msg)}</span>`;
+  }
+  if (phase !== "down") {
     const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, "0");
-    el.innerHTML = `<div class="head">⚠ App update in <span class="count">${mm}:${ss}</span> Save what you're doing!</div><span class="msg">${esc(notice.msg)}</span>`;
+    el.querySelector(".count").textContent = `${mm}:${ss}`;
+    const sr = el.querySelector(".sr");
+    if (!sr.textContent || [60, 30, 15, 5].includes(left)) sr.textContent = `${left} seconds.`;
   }
   document.documentElement.style.setProperty("--notice-h", el.offsetHeight + "px");
 }
