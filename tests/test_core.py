@@ -671,3 +671,19 @@ def test_non_web_links_are_dropped(tmp_path):
     w = db.create_watch(Watch(query="RTX 4060"))
     stats = asyncio.run(Watcher(db, sources=[src]).check(w))
     assert stats["fetched"] == 1 and all(r["key"] != "Test:evil" for r in db.get_listing_rows(w.id))
+
+
+def test_editing_target_rechecks_known_listings(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch); _signup(c)
+    db, watcher = c.app.state.db, c.app.state.watcher
+    src = FakeSource(); src.items = [L("RTX 4060 a", 240, shipping=0, condition="new")]
+    watcher._sources = [src]
+    w = c.post("/api/watches", json={"query": "RTX 4060", "max_price": 200}).json()   # $240 is over the max
+    asyncio.run(watcher.check(db.get_watch(w["id"])))
+    assert db.list_alerts() == []
+    c.put(f"/api/watches/{w['id']}", json={"query": "RTX 4060", "max_price": 300, "target_price": 250})
+    asyncio.run(watcher.check(db.get_watch(w["id"])))
+    (a,) = db.list_alerts()
+    assert "250 target" in a["reason"]                         # the known $240 listing now alerts once
+    asyncio.run(watcher.check(db.get_watch(w["id"])))
+    assert len(db.list_alerts()) == 1                          # and only once

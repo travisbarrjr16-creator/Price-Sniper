@@ -62,6 +62,7 @@ class Watch:
     strict_variants: bool = True                 # "4060" must not match "4060 Ti"
     hide_risky: bool = True
     include_auctions: bool = False
+    rearm: bool = False                          # max/target changed: re-check known listings once
     active: bool = True
     id: Optional[int] = None
     user_id: Optional[int] = None

@@ -192,8 +192,10 @@ class Watcher:
             # Alerts — computed against state *before* this run is saved
             prev_active = [r for r in existing.values() if r["active"] and r["risk"] < scoring.RISK_HIDE_THRESHOLD]
             prev_lowest = min((r["total"] for r in prev_active), default=None)
-            first_run = not existing
+            # A fresh watch, or one whose max/target was just edited, gets one summary of what already qualifies
+            first_run = not existing or watch.rearm
             alerts = self._pick_alerts(watch, alertable, existing, prev_lowest, first_run)
+            watch.rearm = False
 
             ts = now.isoformat()
             for s in scored:

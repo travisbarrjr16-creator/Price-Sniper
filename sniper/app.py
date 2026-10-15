@@ -425,8 +425,11 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     def update_watch(wid: WatchId, body: WatchIn, user: User = Depends(current_user)):
         _validate(body)
         w = _get(wid, user)
+        old_limits = (w.max_price, w.target_price)
         for k, v in body.model_dump().items():
             setattr(w, k, v)
+        if (w.max_price, w.target_price) != old_limits:
+            w.rearm = True          # next check: one alert for known listings that now qualify
         if why := budget.check_watch(db, w, enabled_sources()):
             raise HTTPException(429, why)
         return db.update_watch(w).to_dict()
