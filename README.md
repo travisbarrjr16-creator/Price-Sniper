@@ -78,6 +78,8 @@ user's searches use them.
 | **Email alerts** (Gmail, read-only) | **Craigslist, OfferUp, Mercari, FB Marketplace, Swappa**, through their saved-search alert emails | See below |
 | **Demo** | Simulated | On automatically when nothing else is configured |
 
+**"Check on ↗" quick links** on every watch open that item's search on Walmart, Amazon, eBay, Newegg, Best Buy, FB Marketplace, OfferUp, Mercari, and Craigslist, using your max price/ZIP where the site supports it. No keys needed. Those results stay on the site; they aren't pulled into the app or alerts.
+
 The **site dropdown** above the results shows one site at a time ("only
 Walmart right now"). The **Sites** checkboxes on a new watch choose which
 sites that watch searches.

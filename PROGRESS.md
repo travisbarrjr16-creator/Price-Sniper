@@ -49,6 +49,9 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
   - Discord webhook.
   - Browser notifications and in-app pop-ups.
 
+### "Check on ↗" quick links
+- Every watch has buttons that open the item's own search on Walmart, Amazon, eBay, Newegg, Best Buy, FB Marketplace, OfferUp, Mercari, and Craigslist (with max price and ZIP where supported). No keys or accounts needed; results stay on that site.
+
 ### Day-to-day tools (added from Grok's suggestions)
 - **🎯 Target price** per watch (separate from max) → urgent alert plus a "Target hit" badge.
 - **Clearer alert types:** 🎯 target hit and 🔥 new lowest are urgent; ⬇ price drop and 🆕 new under max are normal unless it's a great deal.
@@ -134,5 +137,5 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
 **Next steps:**
 1. Write `CLOUD_SETUP.md`: click-by-click Google Cloud free-server setup → install → Tailscale → invite friends.
 2. Owner makes the developer accounts in `SITE_KEYS.md` with the deals email: eBay first, then Reddit, then Walmart (started; may need approval).
-3. On the server: `python -m sniper.admin walmart-keys`, paste the public key into walmart.io, add the Consumer ID, then `python -m sniper.admin test-sources`.
+3. **Walmart:** the owner made a Walmart account, but the walmart.io API likely needs affiliate approval (usually requires a website). For now, Walmart is covered by the **"Check on ↗" quick links** on every watch (also Amazon, Newegg, FB Marketplace, OfferUp, Mercari, Craigslist). If approval ever comes through: on the server run `python -m sniper.admin walmart-keys`, paste the public key into walmart.io, add the Consumer ID, then `test-sources`.
 4. First live run: check the eBay/Reddit/Walmart parsers against real data, and set real daily quotas (`SNIPER_LIMIT_<SITE>`).

@@ -29,6 +29,8 @@ Start with **eBay**. It covers the most, including used items and local pickup.
 
 ## Walmart, step by step
 
+> **Easiest option: skip this.** Walmart's API usually needs affiliate approval, which typically requires having a website. Every watch already has a **Check on → Walmart** button that opens Walmart's own search for the item, with no keys at all. Only continue if you want Walmart results inside the app's price list and alerts.
+
 Walmart uses a "key pair" instead of a simple password-style key: a **private key** that stays on your server and a **public key** you give to Walmart. Price Sniper makes both for you.
 
 1. **Make the account.** Go to [walmart.io](https://walmart.io) and sign up with your deals email. Look for the **Affiliate** API / program.

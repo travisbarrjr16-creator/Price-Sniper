@@ -115,6 +115,11 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .theme-btn { white-space: nowrap; }
 .badge.target { background: var(--good-bg); color: var(--good); outline: 2px solid var(--good); }
 .badge.cheapest { background: var(--neutral-bg); color: var(--text); }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; font-size: 13px; }
+.quick .lbl { color: var(--text-2); margin-right: 2px; }
+.quick a { padding: 4px 10px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface-2);
+  color: var(--text); text-decoration: none; white-space: nowrap; }
+.quick a:hover { border-color: var(--accent); }
 .item .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .item .acts button { font-size: 12px; padding: 3px 8px; }
 .item.dismissed { opacity: .55; }
@@ -350,6 +355,8 @@ async function renderMain() {
           <button id="del">Delete</button>
         </div>
       </div>
+      <div class="quick"><span class="lbl">Check on ↗</span>${quickLinks(w).map(([name, url]) =>
+        `<a href="${esc(url)}" target="_blank" rel="noopener" title="Open ${esc(name)}'s own search for this item">${esc(name)}</a>`).join("")}</div>
       <div class="tiles" style="margin-top:12px">
         <div class="tile"><div class="k">Lowest total${state.site ? " · " + esc(state.site) : ""}</div><div class="v">${money(best?.total_cost)}</div><div class="s">${best ? esc(best.source) + " · " + COND[best.condition] : "no matches"}</div></div>
         ${["new", "used"].map(b => `<div class="tile"><div class="k">Typical ${b}</div><div class="v">${money(ref[b].typical)}</div>
@@ -393,6 +400,24 @@ async function renderMain() {
   });
   $("#site").onchange = e => { state.site = e.target.value; renderMain(); };
   drawChart(hist.snapshots);
+}
+
+// Links to each site's own search page for this watch. No keys needed: it's the same as typing
+// the search yourself. Results stay on that site (they're not pulled into the app or alerts).
+function quickLinks(w) {
+  const q = encodeURIComponent(w.query), max = w.max_price ? Math.round(w.max_price) : null, zip = w.zip_code || "";
+  const opt = (k, v) => v ? `&${k}=${encodeURIComponent(v)}` : "";
+  return [
+    ["Walmart", `https://www.walmart.com/search?q=${q}&sort=price_low${opt("max_price", max)}`],
+    ["Amazon", `https://www.amazon.com/s?k=${q}&s=price-asc-rank`],
+    ["eBay", `https://www.ebay.com/sch/i.html?_nkw=${q}&_sop=15${opt("_udhi", max)}`],
+    ["Newegg", `https://www.newegg.com/p/pl?d=${q}`],
+    ["Best Buy", `https://www.bestbuy.com/site/searchpage.jsp?st=${q}`],
+    ["FB Marketplace", `https://www.facebook.com/marketplace/search/?query=${q}${opt("maxPrice", max)}`],
+    ["OfferUp", `https://offerup.com/search?q=${q}${opt("price_max", max)}`],
+    ["Mercari", `https://www.mercari.com/search/?keyword=${q}`],
+    ["Craigslist", `https://www.craigslist.org/search/sss?query=${q}${opt("max_price", max)}${opt("postal", zip)}${zip && w.radius_miles ? opt("search_distance", w.radius_miles) : ""}`],
+  ];
 }
 
 function duplicateWatch(w) {
@@ -464,7 +489,7 @@ function drawChart(snaps) {
   const color = {new: "var(--series-new)", used: "var(--series-used)"};
   let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Lowest total price over time">`;
   ticks.forEach(v => svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${P.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">$${Math.round(v)}</text>`);
-  [t0, t1].forEach((t, k) => svg += `<text x="${x(t)}" y="${H - 6}" text-anchor="${k ? "end" : "start"}" font-size="11" fill="var(--muted)">${new Date(t).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})}</text>`);
+  (t1 > t0 ? [t0, t1] : [t0]).forEach((t, k) => svg += `<text x="${x(t)}" y="${H - 6}" text-anchor="${k ? "end" : "start"}" font-size="11" fill="var(--muted)">${new Date(t).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})}</text>`);
   for (const [b, pts] of Object.entries(series)) {
     if (!pts.length) continue;
     svg += `<path d="${pts.map((p, i) => (i ? "L" : "M") + x(+p.t) + " " + y(p.v)).join(" ")}" fill="none" stroke="${color[b]}" stroke-width="2" stroke-linejoin="round"/>`;

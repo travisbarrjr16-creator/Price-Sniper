@@ -123,3 +123,12 @@ Opened from a one-time link made with python -m sniper.admin reset-link.
 Per-site usage bar in Settings (shown with a small test limit of 300).
 
 ![Shared daily search limits](screenshots/22-shared-daily-limits.png)
+## 23. "Check on" quick links
+
+One tap opens that site's own search for the watch (Walmart, Amazon, eBay, Newegg, Best Buy, FB Marketplace, OfferUp, Mercari, Craigslist). No keys needed.
+
+![Check on quick links](screenshots/23-check-on-quick-links.png)
+
+## 24. Quick links on a phone (dark mode)
+
+![Quick links on a phone](screenshots/24-check-on-quick-links-phone.png)
