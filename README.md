@@ -5,6 +5,8 @@ within 40 miles). It keeps searching every source in the background, works out
 what you'd actually pay, filters out junk and scams, and pings your phone when
 something good shows up.
 
+> **Running it for yourself and a few friends?** Follow **[HOME_SETUP.md](HOME_SETUP.md)**: a free, private setup on a computer at home, one setup script for Windows/Mac/Linux.
+
 ## Quick start
 
 ```bash

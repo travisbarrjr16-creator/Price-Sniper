@@ -99,7 +99,7 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
 
 ## Known limitations / not done yet
 - None of the real marketplace connections have been run with live keys yet; everything so far was tested on the Demo source.
-- The app has to be **hosted** (a small server with HTTPS) for other people to use it. `update.sh` assumes a systemd service and hasn't been run on a real server yet.
+- **Hosting plan:** free, on an always-on home computer, shared privately over Tailscale (see HOME_SETUP.md). The setup scripts are written for Windows, Mac, and Linux. The Linux/Mac install steps were tested in a sandbox; the Windows script and the actual auto-start (launchd/systemd/Task Scheduler) haven't been run on a real machine yet.
 - **Gmail setup:** until Google reviews the app, each user's Gmail has to be added as a "test user" (up to 100 people), because Gmail is a restricted permission.
 - Price history only covers what the app has seen since a watch was created; there's no past sold-price data.
 - Local distance only comes from eBay. Email-alert listings have no distance.
