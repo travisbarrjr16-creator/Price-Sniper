@@ -63,8 +63,31 @@ class Watcher:
         return self._sources if self._sources is not None else enabled_sources()
 
     # --- loop --------------------------------------------------------------
-    def start(self) -> None:
+    def start(self) -> bool:
+        """Start the background checks, unless another copy of the app already runs them on this database
+        (two copies would check twice and send every alert twice)."""
+        if not self._take_lock():
+            log.warning("another Price Sniper process is already running the watches for %s; "
+                        "this one will only serve the web page", self.db.path)
+            return False
         self._task = asyncio.create_task(self._loop())
+        return True
+
+    def _take_lock(self) -> bool:
+        if self.db.path == ":memory:":
+            return True
+        self._lock_file = open(f"{self.db.path}.watcher.lock", "a+")
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(self._lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self._lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True          # held until this process exits (the OS releases it even after a crash)
+        except OSError:
+            self._lock_file.close()
+            return False
 
     async def stop(self) -> None:
         if self._task:

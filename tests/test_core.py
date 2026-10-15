@@ -593,3 +593,30 @@ def test_settings_extras_privacy_delete_and_test_alert(tmp_path, monkeypatch):
     db = c.app.state.db
     assert db.find_user_by_email("a@example.com") is None and db.list_watches() == []
     _signup(c, "a@example.com")                                                                # email is free again
+
+
+def test_only_one_process_runs_the_watches(tmp_path):
+    import subprocess, sys, textwrap
+    db_path = str(tmp_path / "one.db")
+    DB(db_path)
+    holder = textwrap.dedent(f"""
+        import asyncio, time
+        from sniper.db import DB
+        from sniper.watcher import Watcher
+        async def main():
+            w = Watcher(DB({db_path!r})); print(w.start(), flush=True); await asyncio.sleep(30)
+        asyncio.run(main())
+    """)
+    proc = subprocess.Popen([sys.executable, "-c", holder], stdout=subprocess.PIPE, text=True,
+                            env={**__import__("os").environ, "SNIPER_HOUSEKEEPING": "0"})
+    try:
+        assert proc.stdout.readline().strip() == "True"          # first process gets to run the watches
+
+        async def second():
+            w = Watcher(DB(db_path))
+            started = w.start()
+            await w.stop()
+            return started
+        assert asyncio.run(second()) is False                     # a second copy only serves the page
+    finally:
+        proc.kill()
