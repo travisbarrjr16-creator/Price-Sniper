@@ -47,11 +47,11 @@ class EtsySource(Source):
         self.shared_secret = os.getenv("ETSY_SHARED_SECRET", "")
 
     def configured(self) -> bool:
-        return bool(self.api_key)
+        # Since Jan 18, 2026 Etsy requires the shared secret on every request.
+        return bool(self.api_key and self.shared_secret)
 
     async def search(self, watch: Watch, client: httpx.AsyncClient) -> list[Listing]:
-        # Newer Etsy apps send "keystring:shared_secret"; older ones just the keystring.
-        key = f"{self.api_key}:{self.shared_secret}" if self.shared_secret else self.api_key
+        key = f"{self.api_key}:{self.shared_secret}"      # Etsy format: keystring:shared_secret
         params = {"keywords": watch.query, "limit": "100", "sort_on": "price", "sort_order": "asc", "includes": "Images"}
         if watch.max_price:
             params["max_price"] = f"{watch.max_price:.2f}"
