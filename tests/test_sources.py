@@ -184,3 +184,9 @@ def test_gmail_expired_connection_asks_to_reconnect(tmp_path, monkeypatch):
         asyncio.run(run())
     assert not db.gmail_connected(u.id) and db.get_user(u.id).gmail_email == "deals@gmail.com"
     assert asyncio.run(run()) == []         # afterwards it quietly skips instead of erroring every check
+
+
+def test_gmail_k_prices():
+    html = '<a href="https://austin.craigslist.org/sys/d/austin-gaming/7801234999.html">RTX 4090 FE</a> $1.4k'
+    (l,) = parse_alert_html(html)
+    assert l.price == 1400.0

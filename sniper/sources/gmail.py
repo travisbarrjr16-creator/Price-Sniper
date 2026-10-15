@@ -35,7 +35,12 @@ LISTING_PATTERNS = [
 ]
 _A_RE = re.compile(r"<a\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", re.I | re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
-_PRICE_RE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d+(?:\.\d{2})?)")
+_PRICE_RE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(\s?k\b)?", re.I)
+
+
+def _price_value(m: re.Match) -> float:
+    v = float(m.group(1).replace(",", ""))
+    return v * 1000 if m.group(2) else v          # "$1.2k" = 1200
 
 
 def _text(fragment: str) -> str:
@@ -74,7 +79,7 @@ def parse_alert_html(body: str) -> list[Listing]:
         if entry["price"] is None:
             pm = _PRICE_RE.search(anchor) or _PRICE_RE.search(after)
             if pm:
-                entry["price"] = float(pm.group(1).replace(",", ""))
+                entry["price"] = _price_value(pm)
         if not entry["fallback"] and after:
             # text after a photo/price link, used only if no link has real title text
             entry["fallback"] = _PRICE_RE.sub("", after)[:120].strip()
@@ -166,11 +171,16 @@ class GmailAlertsSource(Source):
         r = await client.get(f"{GMAIL}/messages", headers=auth, params={"q": q, "maxResults": "25"})
         r.raise_for_status()
         out: dict[str, Listing] = {}
-        for msg in r.json().get("messages", []):
+        messages = r.json().get("messages", [])
+        for msg in messages:
             m = await client.get(f"{GMAIL}/messages/{msg['id']}", headers=auth, params={"format": "full"})
             if m.status_code != 200:
                 continue
             for body in _bodies(m.json().get("payload", {})):
                 for l in parse_alert_html(body):
                     out.setdefault(l.key, l)
+        if len(messages) >= 3 and not out:
+            # Alert emails are arriving but nothing could be read from them: the site probably changed its layout.
+            raise RuntimeError(f"found {len(messages)} alert emails but couldn't read any listings from them. "
+                               "The email layout may have changed (forward one to the app's admin)")
         return list(out.values())
