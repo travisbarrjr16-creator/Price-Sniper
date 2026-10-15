@@ -243,7 +243,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
           <label>Exclude (comma-sep)</label><input name="excluded_terms" placeholder="laptop, low profile">
           <label>Sales tax %</label><input name="tax_rate" type="number" step="0.01" placeholder="8.25">
           <div class="checks" style="margin-top:8px">
-            <label><input type="checkbox" name="strict_variants" checked> Exact model (no Ti/Super/Pro)</label>
+            <label title="Skips Ti/Super/Pro variants, and for PC parts: laptops, prebuilt PCs, lots and bundles"><input type="checkbox" name="strict_variants" checked> Exact model only (no Ti/Super, laptops, PCs, lots)</label>
             <label><input type="checkbox" name="hide_risky" checked> Hide likely scams</label>
             <label><input type="checkbox" name="include_auctions"> Include auctions</label>
           </div>

@@ -482,3 +482,23 @@ def test_several_finds_make_one_phone_notification(tmp_path):
 ])
 def test_part_matching(query, title, ok):
     assert match(L(title), Watch(query=query))[0] is ok
+
+
+@pytest.mark.parametrize("query,title,ok", [
+    ("RTX 4060", "ASUS TUF Gaming Laptop RTX 4060 16GB RAM", False),
+    ("RTX 4060", "Gaming PC Ryzen 5 5600 RTX 4060 1TB", False),
+    ("RTX 4060", "Lot of 2 RTX 4060 8GB", False),
+    ("RTX 4060", "RTX 4060 + Ryzen bundle", False),
+    ("RTX 4060", "iBUYPOWER Prebuilt Desktop RTX 4060", False),
+    ("RTX 4060", "Gigabyte RTX 4060 Eagle OC 8GB (box included)", True),
+    ("RTX 4060 laptop", "ASUS TUF Gaming Laptop RTX 4060 16GB RAM", True),     # asked for a laptop
+    ("Ryzen 7 7800X3D", "AMD Ryzen 7 7800X3D + B650 motherboard combo", False),
+    ("DDR5 2x16 6400", "Dell XPS desktop i7 DDR5 2x16 6400", False),
+    ("Raspberry Pi 5", "Raspberry Pi 5 8GB single board computer", True),       # not a PC-part search
+    ("Noctua NH-D15", "Noctua NH-D15 dual tower CPU cooler", True),
+    ("iPhone 15", "Apple iPhone 15 128GB bundle with case", True),
+])
+def test_whole_systems_and_bundles(query, title, ok):
+    assert match(L(title), Watch(query=query))[0] is ok
+    if not ok:      # turning off "exact model" lets them through
+        assert match(L(title), Watch(query=query, strict_variants=False))[0]

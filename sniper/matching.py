@@ -26,6 +26,45 @@ JUNK_PHRASES = [
     "parts only", "cracked", "no display", "artifacting",
 ]
 
+# --- PC parts: a search for one part shouldn't match a whole computer or a bundle -------------
+# Which kind of part a search is for, by keywords in the (normalized) search.
+_PART_KINDS = {
+    "gpu": re.compile(r"\b(rtx|gtx|geforce|radeon|rx \d{3,4}|arc [ab]\d{3})\b"),
+    "cpu": re.compile(r"\b(ryzen|threadripper|xeon|core (i|ultra) ?\d|i[3579] \d{4,5}|\d{4,5}x3d)\b"),
+    "ram": re.compile(r"\b(ddr ?[345]|dimm|sodimm)\b"),
+    "storage": re.compile(r"\b(nvme|ssd|m\.2|hdd)\b"),
+    "psu": re.compile(r"\b(psu|power supply|80 plus)\b"),
+    "board": re.compile(r"\b(motherboard|[abxzh]\d{3}[em]?)\b"),
+}
+# Words that mean "this is a whole computer, or several things together".
+_CONTAINER_RE = re.compile(
+    r"\b(laptop|notebook|gaming pc|desktop|pre ?built|computer|tower pc|full (pc|build|system)|"
+    r"complete (pc|build|system)|pc build|custom build|lot of \d+|\d+ ?(pcs|pieces|units)|lot|bundle|combo|"
+    r"all in one|aio pc)\b")
+# For a GPU search, a title that also names a CPU is a PC or a bundle (and the other way around).
+_CROSS_KINDS = {"gpu": ("cpu",), "cpu": ("gpu",), "ram": ("gpu", "cpu"), "storage": ("gpu", "cpu")}
+
+
+def part_kind(query: str) -> str | None:
+    q = normalize(query)
+    return next((k for k, rx in _PART_KINDS.items() if rx.search(q)), None)
+
+
+def whole_system_reason(title: str, query: str) -> str | None:
+    """Why this listing is a computer/bundle rather than the part searched for (None if it's the part)."""
+    kind = part_kind(query)
+    if not kind:
+        return None                     # only for PC-part searches: "computer" is fine in a Raspberry Pi search
+    t, q = normalize(title), normalize(query)
+    m = _CONTAINER_RE.search(t)
+    if m and not _CONTAINER_RE.search(q):
+        return f"not just the part ('{m.group(0)}')"
+    for other in _CROSS_KINDS.get(kind, ()):
+        if _PART_KINDS[other].search(t) and not _PART_KINDS[other].search(q):
+            return f"includes a {other.upper()} (PC or bundle)"
+    return None
+
+
 _UNIT_RE = re.compile(r"(\d+)\s+(gb|tb|mb|mhz|ghz|hz|in|inch|mm|w)\b")
 # "2x16GB" / "2 x 16 GB" -> "2x16" (kits, multipacks)
 _KIT_RE = re.compile(r"\b(\d+) ?x ?(\d+)(?:gb|tb|mb)?\b")
@@ -109,6 +148,8 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
             return False, f"junk '{phrase}'"
 
     if watch.strict_variants:
+        if why := whole_system_reason(listing.title, watch.query):
+            return False, why
         query_set = set(query_tokens)
         for i, tok in enumerate(title_tokens):
             if tok.isdigit() and tok in query_set and i + 1 < len(title_tokens):
