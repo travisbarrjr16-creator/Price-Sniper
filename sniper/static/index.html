@@ -56,7 +56,9 @@ header .status { color: var(--muted); font-size: 12px; margin-left: auto; text-a
 .mnav { display: none; gap: 8px; margin-bottom: 12px; }
 .mnav select { flex: 1; min-width: 0; min-height: 40px; }
 .mnav button { white-space: nowrap; min-height: 40px; }
-@media (max-width: 820px) { .mnav { display: flex; } }
+@media (max-width: 820px) { .mnav { display: flex; } main { scroll-margin-top: calc(var(--notice-h, 0px) + var(--header-h, 100px)); } }
+#toTop { position: fixed; left: 16px; bottom: 16px; z-index: 9; border-radius: 99px; padding: 8px 14px; min-height: 40px;
+  background: var(--surface); box-shadow: 0 4px 14px rgba(0,0,0,.18); }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); margin: 0 0 10px; }
 label { display: block; font-size: 12px; color: var(--text-2); margin: 8px 0 3px; }
@@ -328,6 +330,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
   </main>
 </div>
 <div id="toasts" role="region" aria-label="Notifications" aria-live="polite"></div>
+<button type="button" id="toTop" hidden aria-label="Back to top">↑ Top</button>
 </div>
 
 <script>
@@ -406,6 +409,8 @@ $("#f").addEventListener("submit", async e => {
       if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
     }
     endEdit(); await refresh();
+    // phones: the form is below the results, so jump up to show what was just found/saved
+    if (matchMedia("(max-width: 820px)").matches) $("#main").scrollIntoView({behavior: "smooth", block: "start"});
   } catch (err) { alert(err.message); }
   btn.disabled = false; if (!state.editing) btn.textContent = "Start watching"; else btn.textContent = "Save changes";
 });
@@ -1000,6 +1005,13 @@ function renderNotice() {
   document.documentElement.style.setProperty("--notice-h", el.offsetHeight + "px");
 }
 setInterval(renderNotice, 1000);
+// long result lists on phones: a quick way back up to the watch switcher
+addEventListener("scroll", () => { $("#toTop").hidden = scrollY < 1200 || $("#app").hidden; }, {passive: true});
+$("#toTop").onclick = () => {
+  scrollTo({top: 0, behavior: "smooth"});
+  const sel = $("#mnavSel");
+  if (sel?.offsetParent) sel.focus({preventScroll: true});    // keyboard users land somewhere useful
+};
 checkNotice();
 
 if (!resetToken) setAuthMode(false);
