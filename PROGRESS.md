@@ -121,3 +121,18 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
 5. Ideas to make scam detection smarter?
 6. Simplest cheap way to host this for a handful of friends?
 7. Anything that could get the app or its users in trouble with a marketplace's terms that I should watch out for?
+
+---
+
+## Where we left off (Oct 15, 2026)
+**Decided:**
+- **Hosting:** no always-on home PC, so the plan is **Google Cloud's free e2-micro server** (one of the 3 free US regions: Oregon, Iowa, or South Carolina; set a $0 budget alert) + **Tailscale** for private access. The Linux setup script (`scripts/home/setup.sh`) works there as is.
+- **Users:** the owner + up to 5 friends (Tailscale's free plan reportedly allows 6 people).
+- **Shared limits:** all users share the server's site keys; the daily-limit feature keeps everyone inside each site's quota.
+- **Email alerts are per user:** each person connects their *own* deals Gmail and only sees listings from their own alert emails. Optional; most useful for Craigslist. Unconfirmed whether OfferUp, Mercari, or Facebook send saved-search emails. Gmail filters can auto-forward alert emails from a main inbox to the deals inbox.
+
+**Next steps:**
+1. Write `CLOUD_SETUP.md`: click-by-click Google Cloud free-server setup → install → Tailscale → invite friends.
+2. Owner makes the developer accounts in `SITE_KEYS.md` with the deals email: eBay first, then Reddit, then Walmart (started; may need approval).
+3. On the server: `python -m sniper.admin walmart-keys`, paste the public key into walmart.io, add the Consumer ID, then `python -m sniper.admin test-sources`.
+4. First live run: check the eBay/Reddit/Walmart parsers against real data, and set real daily quotas (`SNIPER_LIMIT_<SITE>`).
