@@ -201,3 +201,31 @@ def test_gmail_token_encrypted_at_rest(tmp_path, monkeypatch):
     raw = db.conn.execute("SELECT gmail_token FROM users").fetchone()[0]
     assert "refresh-token-value" not in raw
     assert db.get_gmail_token(u.id) == "1//refresh-token-value"
+
+
+def test_maintenance_notice(tmp_path, monkeypatch):
+    from sniper import maintenance
+    c = _client(tmp_path, monkeypatch)
+    db = c.app.state.db
+    first = c.get("/api/notice").json()
+    assert first["maintenance"] is None and first["boot_id"]
+
+    maintenance.announce(db, 60, "brb")
+    n = c.get("/api/notice").json()["maintenance"]       # visible without signing in
+    assert n["message"] == "brb" and 55 <= n["seconds_left"] <= 60
+
+    maintenance.cancel(db)
+    assert c.get("/api/notice").json()["maintenance"] is None
+
+    # admin HTTP endpoint: off without a token, needs the right token when on
+    assert c.post("/api/admin/maintenance", json={"seconds": 60}).status_code == 403
+    monkeypatch.setenv("SNIPER_ADMIN_TOKEN", "s3cret-token")
+    assert c.post("/api/admin/maintenance", json={"seconds": 60},
+                  headers={"Authorization": "Bearer nope"}).status_code == 403
+    assert c.post("/api/admin/maintenance", json={"seconds": 60},
+                  headers={"Authorization": "Bearer s3cret-token"}).status_code == 200
+    assert c.get("/api/notice").json()["maintenance"] is not None
+
+    # the notice is cleared when the new version starts up
+    with TestClient(build_app(db=db, background=False)) as restarted:
+        assert restarted.get("/api/notice").json()["maintenance"] is None

@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import scoring
+from . import maintenance, scoring
 from .alerts import valid_discord_webhook, valid_ntfy_topic
 from .db import DB
 from .models import CONDITIONS, User, Watch, utcnow
@@ -53,6 +53,11 @@ class Credentials(BaseModel):
     invite_code: Optional[str] = None
 
 
+class NoticeIn(BaseModel):
+    seconds: int = Field(60, ge=10, le=3600)
+    message: Optional[str] = Field(None, max_length=300)
+
+
 class SettingsIn(BaseModel):
     ntfy_topic: Optional[str] = None
     discord_webhook: Optional[str] = None
@@ -68,11 +73,13 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     gmail_source = get_source("gmail")
     if gmail_source:
         gmail_source.db = db
+    boot_id = secrets.token_hex(8)   # changes on every restart, so browsers know a new version is up
     oauth_states: dict[str, tuple[int, float]] = {}
     login_failures: dict[str, list[float]] = defaultdict(list)
 
     @asynccontextmanager
     async def lifespan(_app):
+        maintenance.clear_on_startup(db)
         if background:
             watcher.start()
         yield
@@ -80,6 +87,26 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
 
     app = FastAPI(title="Price Sniper", lifespan=lifespan)
     app.state.db, app.state.watcher = db, watcher
+
+    # --- maintenance notice (public: shows on the sign-in screen too) --------
+    @app.get("/api/notice")
+    def notice():
+        return {"maintenance": maintenance.current(db), "boot_id": boot_id}
+
+    def require_admin(request: Request) -> None:
+        token = os.getenv("SNIPER_ADMIN_TOKEN")
+        given = request.headers.get("authorization", "").removeprefix("Bearer ")
+        if not token or not secrets.compare_digest(given, token):
+            raise HTTPException(403, "admin token required")
+
+    @app.post("/api/admin/maintenance", dependencies=[Depends(require_admin)])
+    def announce(body: NoticeIn):
+        return maintenance.announce(db, body.seconds, body.message)
+
+    @app.delete("/api/admin/maintenance", dependencies=[Depends(require_admin)])
+    def cancel_notice():
+        maintenance.cancel(db)
+        return {"ok": True}
 
     # --- auth ----------------------------------------------------------------
     def current_user(request: Request) -> User:

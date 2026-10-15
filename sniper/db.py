@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS snapshots (
     median_total REAL NOT NULL,
     count INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_snapshots ON snapshots(watch_id, ts);
 """
 
@@ -85,6 +89,19 @@ class DB:
             if "user_id" not in cols:   # databases from before accounts existed
                 self.conn.execute("ALTER TABLE watches ADD COLUMN user_id INTEGER")
             self.conn.commit()
+
+    # --- app-wide settings (e.g. the maintenance notice) -------------------
+    def get_setting(self, key: str) -> Optional[str]:
+        r = self.conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+        return r["value"] if r else None
+
+    def set_setting(self, key: str, value: Optional[str]) -> None:
+        with self.lock, self.conn:
+            if value is None:
+                self.conn.execute("DELETE FROM app_settings WHERE key=?", (key,))
+            else:
+                self.conn.execute("INSERT INTO app_settings VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                                  (key, value))
 
     # --- users & sessions --------------------------------------------------
     def _row_to_user(self, r: sqlite3.Row) -> User:

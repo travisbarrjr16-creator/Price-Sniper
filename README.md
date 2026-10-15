@@ -95,6 +95,25 @@ uvicorn sniper.app:app --host 0.0.0.0 --port 8000
 Data is kept in SQLite (`sniper.db`). Back it up together with
 `.sniper_secret`; without the secret, stored Gmail connections can't be decrypted.
 
+## Updating with a heads-up for users
+
+```bash
+scripts/update.sh            # 60-second warning, then pull, install, test, restart
+scripts/update.sh 120 "Adding Newegg, back in 2 min"
+```
+
+Every open page shows a countdown banner ("Update in 0:45. Finish what
+you're doing"), then "Updating now…". Each page reloads by itself when the
+new version answers, and users stay signed in. If the pull, install, or tests
+fail, the script cancels the banner and leaves the old version running. The
+script assumes a systemd service named `price-sniper` (set `SNIPER_SERVICE`
+to change it).
+
+To do it by hand:
+`python -m sniper.maintenance announce --in 60` · `cancel` · `status`.
+From CI or another machine: set `SNIPER_ADMIN_TOKEN`, then
+`curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"seconds":60}' https://your-app/api/admin/maintenance`.
+
 ## API
 
 `POST /api/auth/signup|login|logout` · `GET/PUT /api/me` · `GET /api/gmail/connect` ·
@@ -120,5 +139,6 @@ sniper/
   db.py         SQLite
   app.py        FastAPI + serves static/index.html
   security.py   password hashing, sessions, token encryption
+  maintenance.py  update heads-up notice (CLI + used by the banner)
   sources/      ebay, bestbuy, walmart, reverb, etsy, gmail (alert emails), demo
 ```

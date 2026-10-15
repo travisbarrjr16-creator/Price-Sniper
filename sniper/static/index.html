@@ -88,6 +88,12 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); display: none; white-space: nowrap; }
 .empty { color: var(--muted); padding: 30px 10px; text-align: center; }
 .err { color: var(--bad); font-size: 12px; }
+#notice { position: sticky; top: 0; z-index: 20; padding: 10px 16px; text-align: center; font-weight: 650;
+  background: var(--warn-bg); color: var(--warn); border-bottom: 2px solid var(--warn); }
+#notice.down { background: var(--neutral-bg); color: var(--text); border-color: var(--border); }
+#notice .count { font-variant-numeric: tabular-nums; font-size: 1.15em; }
+#notice .msg { display: block; font-weight: 500; font-size: 13px; margin-top: 2px; }
+#notice ~ #app header { top: var(--notice-h, 0px); }
 .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .auth-card { width: 100%; max-width: 360px; }
 .auth-card h1 { font-size: 20px; margin: 0 0 4px; }
@@ -112,6 +118,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
 </style>
 </head>
 <body>
+<div id="notice" role="status" aria-live="polite" hidden></div>
 <div class="auth-wrap" id="auth" hidden>
   <div class="card auth-card">
     <h1>🎯 Price Sniper</h1>
@@ -480,6 +487,42 @@ async function boot() {
   const g = new URLSearchParams(location.search).get("gmail");
   if (g) { history.replaceState(null, "", "/"); if (g === "connected") $("#settingsBtn").click(); }
 }
+// --- update heads-up -----------------------------------------------------
+// The server announces downtime a minute ahead; we count down locally, then
+// wait for the new version (a new boot_id) and reload.
+const notice = {boot: null, deadline: null, msg: "", down: false};
+async function checkNotice() {
+  try {
+    const j = await (await fetch("/api/notice", {cache: "no-store"})).json();
+    if (notice.boot && j.boot_id !== notice.boot) { location.reload(); return; }
+    notice.boot = j.boot_id; notice.down = false;
+    const m = j.maintenance;
+    notice.deadline = m ? Date.now() + m.seconds_left * 1000 : null;
+    notice.msg = m ? m.message : "";
+  } catch {
+    if (notice.deadline) notice.down = true;   // expected: the server is restarting
+  }
+  renderNotice();
+  setTimeout(checkNotice, notice.deadline || notice.down ? 3000 : 5000);
+}
+function renderNotice() {
+  const el = $("#notice"), now = Date.now();
+  if (!notice.deadline && !notice.down) { el.hidden = true; document.documentElement.style.removeProperty("--notice-h"); return; }
+  el.hidden = false;
+  const left = Math.max(0, Math.ceil((notice.deadline - now) / 1000));
+  if (notice.down || left === 0) {
+    el.className = "down";
+    el.innerHTML = `🔧 Updating now… this page will reload when it's back.<span class="msg">${esc(notice.msg)}</span>`;
+  } else {
+    el.className = "";
+    const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, "0");
+    el.innerHTML = `⏳ Update in <span class="count">${mm}:${ss}</span>. Finish what you're doing.<span class="msg">${esc(notice.msg)}</span>`;
+  }
+  document.documentElement.style.setProperty("--notice-h", el.offsetHeight + "px");
+}
+setInterval(renderNotice, 1000);
+checkNotice();
+
 setAuthMode(false);
 boot();
 </script>
