@@ -88,6 +88,19 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); display: none; white-space: nowrap; }
 .empty { color: var(--muted); padding: 30px 10px; text-align: center; }
 .err { color: var(--bad); font-size: 12px; }
+.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.auth-card { width: 100%; max-width: 360px; }
+.auth-card h1 { font-size: 20px; margin: 0 0 4px; }
+.auth-card .sub { color: var(--text-2); margin: 0 0 12px; }
+.linkbtn { background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; font: inherit; }
+.user { display: flex; gap: 8px; align-items: center; }
+.user .email { color: var(--text-2); font-size: 13px; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); padding: 18px; width: min(440px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+.hint { font-size: 12px; color: var(--muted); margin-top: 3px; }
+select.site { width: auto; min-width: 150px; }
+@media (max-width: 600px) { header .status, .user .email { display: none; } header { flex-wrap: wrap; } .user { margin-left: auto; } }
+[hidden] { display: none !important; }
 #toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 10; max-width: calc(100vw - 32px); }
 .toast { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--good); border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.15); width: 320px; max-width: 100%; }
 .toast a { color: var(--accent); }
@@ -97,10 +110,47 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
 </style>
 </head>
 <body>
+<div class="auth-wrap" id="auth" hidden>
+  <div class="card auth-card">
+    <h1>🎯 Price Sniper</h1>
+    <p class="sub" id="authSub">Sign in to see your watches.</p>
+    <form id="authForm">
+      <label>Email</label><input name="email" type="email" autocomplete="username" required>
+      <label>Password</label><input name="password" type="password" autocomplete="current-password" minlength="8" required>
+      <div id="inviteRow" hidden><label>Invite code</label><input name="invite_code"></div>
+      <div class="err" id="authErr" style="margin-top:8px"></div>
+      <div style="margin-top:12px; display:flex; gap:12px; align-items:center">
+        <button class="primary" type="submit" id="authBtn">Sign in</button>
+        <button class="linkbtn" type="button" id="authToggle">Create an account</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="app" hidden>
 <header>
   <h1>🎯 Price Sniper</h1>
   <div class="status" id="status"></div>
+  <div class="user"><span class="email" id="who"></span><button id="settingsBtn">Settings</button><button id="logoutBtn">Sign out</button></div>
 </header>
+
+<dialog id="settings">
+  <h2>Alerts & accounts</h2>
+  <form id="settingsForm" method="dialog">
+    <label>ntfy topic (phone push)</label>
+    <input name="ntfy_topic" placeholder="sniper-7f3k9q">
+    <div class="hint">Install the ntfy app, subscribe to a hard-to-guess topic, enter it here.</div>
+    <label>Discord webhook (optional)</label>
+    <input name="discord_webhook" placeholder="https://discord.com/api/webhooks/...">
+    <label style="margin-top:14px">Email alerts from Craigslist, OfferUp, Mercari, Facebook…</label>
+    <div id="gmailBox"></div>
+    <div class="err" id="settingsErr" style="margin-top:8px"></div>
+    <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end">
+      <button type="button" id="settingsClose">Close</button>
+      <button class="primary" type="submit" id="settingsSave">Save</button>
+    </div>
+  </form>
+</dialog>
 
 <div class="layout">
   <aside class="stack">
@@ -115,6 +165,8 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
         </div>
         <label>Condition</label>
         <div class="checks" id="conds"></div>
+        <label>Sites</label>
+        <div class="checks" id="srcs"></div>
         <div class="row">
           <div><label>ZIP (for local)</label><input name="zip_code" placeholder="78701"></div>
           <div><label>Radius (mi)</label><input name="radius_miles" type="number" placeholder="40"></div>
@@ -144,6 +196,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
   </main>
 </div>
 <div id="toasts"></div>
+</div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -151,11 +204,12 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const money = v => v == null ? "—" : "$" + Number(v).toFixed(2);
 const COND = {new: "New", open_box: "Open box", refurbished: "Refurb", used: "Used", parts: "For parts"};
 const DEAL = {great: "Great deal", good: "Good price", fair: "Typical price", high: "Above typical", suspicious: "Too good to be true"};
-let state = {watches: [], sel: null, sort: "total", showHidden: false, lastAlert: null};
+let state = {watches: [], sel: null, sort: "total", showHidden: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
 try { state.sort = localStorage.getItem("sort") || "total"; } catch {}
 
 const api = async (path, opts = {}) => {
   const r = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opts});
+  if (r.status === 401 && !path.startsWith("/api/auth")) { showAuth(); throw new Error("Please sign in"); }
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.json();
 };
@@ -175,11 +229,13 @@ $("#f").addEventListener("submit", async e => {
     tax_rate: (num("tax_rate") || 0) / 100,
     strict_variants: f.get("strict_variants") === "on", hide_risky: f.get("hide_risky") === "on",
     include_auctions: f.get("include_auctions") === "on",
+    sources: (() => { const all = [...document.querySelectorAll("#srcs input")], on = all.filter(i => i.checked);
+      return on.length === all.length ? [] : on.map(i => i.value); })(),
   };
   const btn = $("#add"); btn.disabled = true; btn.textContent = "Searching…";
   try {
     const w = await api("/api/watches", {method: "POST", body: JSON.stringify(body)});
-    state.sel = w.id; e.target.reset(); document.querySelectorAll("#conds input").forEach(i => i.checked = true);
+    state.sel = w.id; state.site = ""; e.target.reset(); document.querySelectorAll("#conds input, #srcs input").forEach(i => i.checked = true);
     if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
     await refresh();
   } catch (err) { alert(err.message); }
@@ -201,16 +257,18 @@ function renderWatches() {
       <div class="q">${esc(w.query)}${w.active ? "" : " (paused)"}</div>
       <div class="meta">${w.count} listings · lowest ${money(w.lowest)}${w.max_price ? ` · max $${w.max_price}` : ""}</div>
     </div>`).join("");
-  el.querySelectorAll(".watch").forEach(d => d.onclick = () => { state.sel = +d.dataset.id; renderWatches(); renderMain(); });
+  el.querySelectorAll(".watch").forEach(d => d.onclick = () => { state.sel = +d.dataset.id; state.site = ""; renderWatches(); renderMain(); });
 }
 
 async function renderMain() {
   const w = state.watches.find(x => x.id === state.sel);
   if (!w) return;
-  const [items, hist] = await Promise.all([
-    api(`/api/watches/${w.id}/listings?sort=${state.sort}&include_hidden=${state.showHidden}`),
+  const [res, hist] = await Promise.all([
+    api(`/api/watches/${w.id}/listings?sort=${state.sort}&include_hidden=${state.showHidden}&site=${encodeURIComponent(state.site)}`),
     api(`/api/watches/${w.id}/history`),
   ]);
+  const items = res.items, siteCounts = res.sites;
+  if (state.site && !(state.site in siteCounts)) siteCounts[state.site] = 0;
   const visible = items.filter(i => !i.hidden);
   const best = visible.reduce((a, b) => (!a || b.total_cost < a.total_cost ? b : a), null);
   const st = w.stats;
@@ -230,7 +288,7 @@ async function renderMain() {
         </div>
       </div>
       <div class="tiles" style="margin-top:12px">
-        <div class="tile"><div class="k">Lowest total</div><div class="v">${money(best?.total_cost)}</div><div class="s">${best ? esc(best.source) + " · " + COND[best.condition] : "no matches"}</div></div>
+        <div class="tile"><div class="k">Lowest total${state.site ? " · " + esc(state.site) : ""}</div><div class="v">${money(best?.total_cost)}</div><div class="s">${best ? esc(best.source) + " · " + COND[best.condition] : "no matches"}</div></div>
         <div class="tile"><div class="k">Typical new</div><div class="v">${money(ref.new.typical)}</div><div class="s">${ref.new.sample_size} listings, 30 days</div></div>
         <div class="tile"><div class="k">Typical used</div><div class="v">${money(ref.used.typical)}</div><div class="s">${ref.used.sample_size} listings, 30 days</div></div>
         <div class="tile"><div class="k">Your max</div><div class="v">${w.max_price ? "$" + w.max_price : "—"}</div><div class="s">${visible.filter(i => w.max_price && i.total_cost <= w.max_price).length} under it now</div></div>
@@ -241,10 +299,14 @@ async function renderMain() {
       <div class="toolbar" style="margin-bottom:10px">
         <div class="seg" id="sort">${[["total","Cheapest"],["value","Best value"],["distance","Nearest"],["newest","Newest"]]
           .map(([k, v]) => `<button data-k="${k}" class="${state.sort === k ? "on" : ""}">${v}</button>`).join("")}</div>
+        <select class="site" id="site" aria-label="Filter by site">
+          <option value="">All sites (${Object.values(siteCounts).reduce((a, b) => a + b, 0)})</option>
+          ${Object.entries(siteCounts).map(([k, n]) => `<option value="${esc(k)}" ${state.site === k ? "selected" : ""}>${esc(k)} (${n})</option>`).join("")}
+        </select>
         <label class="checks" style="margin:0"><label><input type="checkbox" id="sh" ${state.showHidden ? "checked" : ""}> Show hidden scams</label></label>
         <span class="filtered">${st ? `${st.fetched} fetched → ${st.matched} matched${rej ? ` (filtered: ${esc(rej)})` : ""}${st.hidden_risky ? `, ${st.hidden_risky} flagged risky` : ""}` : ""}</span>
       </div>
-      <div class="list">${items.length ? items.map(itemHTML).join("") : '<div class="empty">No matching listings right now. The watch keeps checking.</div>'}</div>
+      <div class="list">${items.length ? items.map(itemHTML).join("") : `<div class="empty">${state.site ? `Nothing from ${esc(state.site)} right now.` : "No matching listings right now. The watch keeps checking."}</div>`}</div>
     </div>`;
 
   $("#chk").onclick = async e => { e.target.disabled = true; e.target.textContent = "Checking…"; await api(`/api/watches/${w.id}/check`, {method: "POST"}).catch(x => alert(x.message)); refresh(); };
@@ -252,6 +314,7 @@ async function renderMain() {
   $("#del").onclick = async () => { if (confirm(`Stop watching "${w.query}"?`)) { await api(`/api/watches/${w.id}`, {method: "DELETE"}); state.sel = null; refresh(); } };
   $("#sort").querySelectorAll("button").forEach(b => b.onclick = () => { state.sort = b.dataset.k; try { localStorage.setItem("sort", state.sort); } catch {} renderMain(); });
   $("#sh").onchange = e => { state.showHidden = e.target.checked; renderMain(); };
+  $("#site").onchange = e => { state.site = e.target.value; renderMain(); };
   drawChart(hist.snapshots);
 }
 
@@ -338,10 +401,80 @@ async function pollAlerts() {
   } catch {}
 }
 
-api("/api/status").then(s => $("#status").innerHTML = `Sources: ${esc(s.sources.join(", ") || "none")}<br>Push: ${esc(s.alert_channels.join(", ") || "browser only")}`);
-refresh(); pollAlerts();
-setInterval(pollAlerts, 20000);
-setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60000);
+// --- accounts -----------------------------------------------------------
+let signingUp = false;
+function showAuth() {
+  state.timers.forEach(clearInterval); state.timers = [];
+  $("#app").hidden = true; $("#auth").hidden = false;
+}
+function setAuthMode(up) {
+  signingUp = up;
+  $("#authBtn").textContent = up ? "Create account" : "Sign in";
+  $("#authToggle").textContent = up ? "I already have an account" : "Create an account";
+  $("#authSub").textContent = up ? "Your watches and alerts are private to your account." : "Sign in to see your watches.";
+  $("#authForm").password.autocomplete = up ? "new-password" : "current-password";
+  api("/api/auth/config").then(c => $("#inviteRow").hidden = !(up && c.invite_required));
+  $("#authErr").textContent = "";
+}
+$("#authToggle").onclick = () => setAuthMode(!signingUp);
+$("#authForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const body = {email: f.get("email"), password: f.get("password"), invite_code: f.get("invite_code") || null};
+  try {
+    await api(signingUp ? "/api/auth/signup" : "/api/auth/login", {method: "POST", body: JSON.stringify(body)});
+    e.target.reset(); boot();
+  } catch (err) { $("#authErr").textContent = err.message; }
+});
+$("#logoutBtn").onclick = async () => {
+  await api("/api/auth/logout", {method: "POST"}).catch(() => {});
+  state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: ""};
+  $("#main").innerHTML = ""; showAuth();
+};
+
+function renderGmail() {
+  const me = state.me, box = $("#gmailBox");
+  if (!me.gmail_available) { box.innerHTML = '<div class="hint">Not set up on this server yet (the admin needs to add Google sign-in keys).</div>'; return; }
+  box.innerHTML = me.gmail_email
+    ? `<div>Connected: <b>${esc(me.gmail_email)}</b> <button type="button" id="gmailOff">Disconnect</button></div>
+       <div class="hint">Read-only. Turn on saved-search email alerts on those sites and matching listings show up here.</div>`
+    : `<a class="open" href="/api/gmail/connect" style="display:inline-block;padding:6px 12px;border-radius:7px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Connect Gmail (read-only)</a>
+       <div class="hint">Reads only marketplace alert emails. Your marketplace passwords are never needed.</div>`;
+  const off = $("#gmailOff");
+  if (off) off.onclick = async () => { await api("/api/gmail/disconnect", {method: "POST"}); state.me.gmail_email = null; renderGmail(); };
+}
+$("#settingsBtn").onclick = () => {
+  const f = $("#settingsForm"); f.ntfy_topic.value = state.me.ntfy_topic || ""; f.discord_webhook.value = state.me.discord_webhook || "";
+  $("#settingsErr").textContent = ""; renderGmail(); $("#settings").showModal();
+};
+$("#settingsClose").onclick = () => $("#settings").close();
+$("#settingsForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = e.target;
+  try {
+    state.me = {...state.me, ...await api("/api/me", {method: "PUT", body: JSON.stringify({ntfy_topic: f.ntfy_topic.value, discord_webhook: f.discord_webhook.value})})};
+    $("#settings").close(); loadStatus();
+  } catch (err) { $("#settingsErr").textContent = err.message; }
+});
+
+function loadStatus() {
+  api("/api/status").then(s => $("#status").innerHTML = `Sources: ${esc(s.sources.join(", ") || "none")}<br>Push: ${esc(s.alert_channels.join(", ") || "browser only")}`).catch(() => {});
+}
+
+async function boot() {
+  try { state.me = await api("/api/me"); } catch { return; }
+  $("#auth").hidden = true; $("#app").hidden = false;
+  $("#who").textContent = state.me.email;
+  state.sources = (await api("/api/sources")).filter(s => s.enabled);
+  $("#srcs").innerHTML = state.sources.map(s => `<label><input type="checkbox" value="${s.key}" checked> ${esc(s.name)}</label>`).join("");
+  loadStatus(); refresh(); pollAlerts();
+  state.timers.push(setInterval(pollAlerts, 20000));
+  state.timers.push(setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60000));
+  const g = new URLSearchParams(location.search).get("gmail");
+  if (g) { history.replaceState(null, "", "/"); if (g === "connected") $("#settingsBtn").click(); }
+}
+setAuthMode(false);
+boot();
 </script>
 </body>
 </html>

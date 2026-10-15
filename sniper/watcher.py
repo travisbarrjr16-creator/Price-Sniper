@@ -93,6 +93,8 @@ class Watcher:
                     errors.append(f"{s.name}: {res}")
                     log.warning("source %s failed: %s", s.name, res)
                 else:
+                    for l in res:
+                        l.source_key = s.key
                     raw.extend(res)
 
             # Strict matching
@@ -198,4 +200,9 @@ class Watcher:
         msg = f"{reason}\n{l.title}\n{l.condition.replace('_', ' ')} · {where}{deal}"
         self.db.add_alert(watch.id, l.key, reason, l.title, s.total_cost, l.url)
         self.db.set_alerted(watch.id, l.key, s.total_cost)
-        await self.notifier.send(client, title, msg, l.url, urgent=bool(s.deal and s.deal["label"] == "great"))
+        user = self.db.get_user(watch.user_id) if watch.user_id else None
+        await self.notifier.send(
+            client, title, msg, l.url, urgent=bool(s.deal and s.deal["label"] == "great"),
+            ntfy_topic=user.ntfy_topic if user else None,
+            discord_webhook=user.discord_webhook if user else None,
+        )

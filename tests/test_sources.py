@@ -1,0 +1,61 @@
+import base64
+
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
+from sniper.sources.etsy import parse_results
+from sniper.sources.gmail import parse_alert_html
+from sniper.sources.reverb import parse_listings
+from sniper.sources.walmart import parse_items, sign_headers
+
+
+def test_walmart_signature_verifies():
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    h = sign_headers("consumer-123", "1", pem, ts_ms=1700000000000)
+    assert h["WM_CONSUMER.INTIMESTAMP"] == "1700000000000"
+    key.public_key().verify(base64.b64decode(h["WM_SEC.AUTH_SIGNATURE"]),
+                            b"consumer-123\n1700000000000\n1\n", padding.PKCS1v15(), hashes.SHA256())
+
+
+def test_walmart_parse():
+    items = parse_items([
+        {"itemId": 1, "name": "MSI RTX 4060 Ventus", "salePrice": 289.0, "freeShippingOver35Dollars": True,
+         "sellerInfo": "Walmart.com", "productTrackingUrl": "https://goto.walmart.com/x"},
+        {"itemId": 2, "name": "Restored RTX 4060", "salePrice": 240.0, "standardShipRate": 5.99, "sellerInfo": "GPU Guys"},
+        {"itemId": 3, "name": "no price"},
+    ])
+    assert [i.condition for i in items] == ["new", "refurbished"]
+    assert items[0].shipping == 0.0 and items[0].seller_rating == 100.0
+    assert items[1].shipping == 5.99 and items[1].seller_rating is None
+
+
+def test_reverb_parse():
+    data = {"listings": [{
+        "id": 77, "title": "RTX 4060 8GB", "price": {"amount": "250.00"},
+        "condition": {"display_name": "Excellent"}, "shop_name": "gearhead",
+        "shipping": {"rates": [{"region_code": "US_CON", "rate": {"amount": "15.00"}}]},
+        "_links": {"web": {"href": "https://reverb.com/item/77"}}, "photos": [],
+    }]}
+    (l,) = parse_listings(data)
+    assert (l.price, l.shipping, l.condition, l.url) == (250.0, 15.0, "used", "https://reverb.com/item/77")
+
+
+def test_etsy_parse():
+    (l,) = parse_results({"results": [{"listing_id": 5, "title": "Vintage RTX 4060 case mod",
+                                       "price": {"amount": 12999, "divisor": 100}, "url": "https://etsy.com/l/5"}]})
+    assert l.price == 129.99 and l.condition == "used" and l.shipping is None
+
+
+def test_gmail_alert_parse_merges_links_and_unwraps_redirects():
+    html = """
+    <a href="https://austin.craigslist.org/sop/d/austin-msi-rtx-4060/7801234567.html"><img src=x></a>
+    <a href="https://austin.craigslist.org/sop/d/austin-msi-rtx-4060/7801234567.html">MSI RTX 4060 Ventus 8GB</a> &mdash; $240
+    <a href="https://click.offerup.com/r?u=https%3A%2F%2Fofferup.com%2Fitem%2Fdetail%2Fabc-123">$1,255</a> ASUS Dual RTX 4060
+    <a href="https://example.com/unsubscribe">Unsubscribe</a>
+    """
+    got = {l.source: l for l in parse_alert_html(html)}
+    assert set(got) == {"Craigslist", "OfferUp"}
+    assert got["Craigslist"].title == "MSI RTX 4060 Ventus 8GB" and got["Craigslist"].price == 240.0
+    assert got["OfferUp"].price == 1255.0 and got["OfferUp"].url == "https://offerup.com/item/detail/abc-123"
+    assert got["Craigslist"].local_pickup and not got["Craigslist"].taxable

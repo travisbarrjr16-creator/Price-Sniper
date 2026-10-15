@@ -36,6 +36,7 @@ class Listing:
     image_url: Optional[str] = None
     description: str = ""            # snippet, used for scam heuristics
     listed_at: Optional[datetime] = None
+    source_key: str = ""             # adapter key ("ebay", "walmart"...), set by the watcher
 
     @property
     def key(self) -> str:
@@ -61,6 +62,7 @@ class Watch:
     include_auctions: bool = False
     active: bool = True
     id: Optional[int] = None
+    user_id: Optional[int] = None
     created_at: Optional[str] = None
     last_checked_at: Optional[str] = None
     last_error: Optional[str] = None
@@ -79,3 +81,16 @@ class ScoredListing:
     risk_score: int                  # 0-100
     risk_flags: list[str]
     deal: Optional[dict] = None      # {"label", "pct_vs_median", "median"}
+
+
+@dataclass
+class User:
+    id: int
+    email: str
+    ntfy_topic: Optional[str] = None
+    discord_webhook: Optional[str] = None
+    gmail_email: Optional[str] = None   # set when Gmail is connected
+
+    def public(self) -> dict:
+        return {"id": self.id, "email": self.email, "ntfy_topic": self.ntfy_topic,
+                "discord_webhook": self.discord_webhook, "gmail_email": self.gmail_email}

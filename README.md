@@ -8,7 +8,7 @@ something good shows up.
 ## Quick start
 
 ```bash
-pip install -e .            # or: pip install fastapi uvicorn httpx
+pip install -e .            # or: pip install fastapi uvicorn httpx cryptography
 cp .env.example .env        # add keys (optional; see below)
 uvicorn sniper.app:app --port 8000
 # open http://localhost:8000
@@ -31,38 +31,75 @@ the whole flow right away.
 | **Alerts** | Sent when a listing is **new or cut in price** and either **beats the current lowest** or is **under your max**. The first scan sends one summary alert, not a flood. Delivered through ntfy (phone push), Discord, browser notifications, and in-app toasts. |
 | **One-tap open** | Every result and every push notification links straight to the listing. On a phone, eBay/Best Buy links open in their apps. |
 
+## Accounts
+
+Each person signs up with an email and password. Watches, results, alerts,
+push settings, and Gmail connection are private to that account. Passwords are
+hashed with scrypt, sessions are random tokens stored hashed, and Gmail
+refresh tokens are encrypted at rest. Set `SNIPER_INVITE_CODE` so only people
+you give the code to can sign up.
+
+Marketplace API keys are server-wide. You set them once in `.env` and every
+user's searches use them.
+
 ## Sources
 
-| Source | Covers | Setup |
+| Source | Covers | Free setup |
 |---|---|---|
-| **eBay** (Browse API) | new, open box, refurb, used, **local pickup within your radius**, shipping to your ZIP | Free keys at [developer.ebay.com](https://developer.ebay.com) → `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` (production keyset) |
-| **Best Buy** (Products API) | new and refurb retail | Key at [developer.bestbuy.com](https://developer.bestbuy.com) → `BESTBUY_API_KEY` |
-| **Demo** | simulated | On automatically when nothing else is configured. `SNIPER_DEMO=1` forces it on, `0` forces it off. |
+| **eBay** (Browse API) | New, open box, refurb, used, **local pickup within your radius** | [developer.ebay.com](https://developer.ebay.com) → `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` |
+| **Best Buy** (Products API) | New + refurb retail | [developer.bestbuy.com](https://developer.bestbuy.com) → `BESTBUY_API_KEY` |
+| **Walmart** (Affiliate API) | Walmart.com + marketplace sellers; "Restored" = refurb | [walmart.io](https://walmart.io): make an account, generate an RSA key pair, upload the public key → `WALMART_CONSUMER_ID`, `WALMART_PRIVATE_KEY_PATH`. *Unconfirmed whether new sign-ups are still approved.* |
+| **Reverb** | Music gear, some electronics; new/used | Personal token in reverb.com settings → `REVERB_TOKEN` |
+| **Etsy** (Open API v3) | Handmade/vintage; shipping is estimated | [etsy.com/developers](https://www.etsy.com/developers) → `ETSY_API_KEY` (+ `ETSY_SHARED_SECRET`) |
+| **Email alerts** (Gmail, read-only) | **Craigslist, OfferUp, Mercari, FB Marketplace, Swappa**, through their saved-search alert emails | See below |
+| **Demo** | Simulated | On automatically when nothing else is configured |
 
-**Facebook Marketplace, OfferUp, Craigslist, Swappa:** none of these has a
-public search API, and scraping them breaks their terms (and breaks often).
-The adapter interface is small, so if you get legitimate access (a partner API
-or an alert-email feed), write a class in `sniper/sources/` that implements
-`configured()` and `search()` and returns `Listing`s, then add it to
-`ALL_SOURCES`. Matching, scoring, history, and alerts all work for it with no
-other changes.
+The **site dropdown** above the results shows one site at a time ("only
+Walmart right now"). The **Sites** checkboxes on a new watch choose which
+sites that watch searches.
+
+**Not included:** Amazon (its API needs an affiliate account with recent
+sales; Keepa is paid), Newegg (no API), Discogs (its API can't search
+marketplace listings), and direct Facebook/OfferUp/Mercari search (no public
+API; logging in as you would break their terms and risk your account). The
+email-alert source covers those sites the legitimate way.
+
+### Gmail alert emails setup (server admin, once)
+1. In [Google Cloud Console](https://console.cloud.google.com), create a project, enable the **Gmail API**, and create an **OAuth client ID** (type *Web application*).
+2. Add the authorized redirect URI `<PUBLIC_URL>/api/gmail/callback`.
+3. On the OAuth consent screen, add the `gmail.readonly` scope. While the app is in **Testing**, add each user's Gmail as a *test user* (up to 100). Publishing it for anyone requires Google's security review, because Gmail is a restricted scope.
+4. Put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`.
+
+Then each user goes to **Settings → Connect Gmail** and turns on saved-search
+email alerts on Craigslist, OfferUp, and the rest. Matching listings show up
+in their results, are scored and filtered like everything else, and trigger
+their push alerts. Email layouts vary, so the parsing is best-effort.
 
 ## Phone push (ntfy)
 
-1. Install the **ntfy** app (iOS/Android) and subscribe to a hard-to-guess topic, e.g. `sniper-7f3k9q`.
-2. Set `NTFY_TOPIC=sniper-7f3k9q` in `.env`.
-3. Alerts show price, reason, and how far below typical it is. Tap one to open the listing.
+Each user installs the **ntfy** app, subscribes to a hard-to-guess topic, and
+enters it in **Settings**. Tap a notification to open the listing.
 
-## Running it 24/7
+## Running it 24/7 / for other people
 
-The watcher runs only while the server is up. Leave it on a home PC, a
-Raspberry Pi, or a small VPS (`uvicorn sniper.app:app --host 0.0.0.0`). Data
-is kept in SQLite (`sniper.db`, or set `SNIPER_DB`).
+The watcher runs only while the server is up. For other people to use it, it
+has to run somewhere they can reach, such as a small VPS or a home server
+behind a tunnel. Put it behind HTTPS (Caddy, nginx, or Cloudflare Tunnel), set
+`PUBLIC_URL=https://your-domain` so cookies are marked secure, and set
+`SNIPER_INVITE_CODE`.
+
+```bash
+uvicorn sniper.app:app --host 0.0.0.0 --port 8000
+```
+
+Data is kept in SQLite (`sniper.db`). Back it up together with
+`.sniper_secret`; without the secret, stored Gmail connections can't be decrypted.
 
 ## API
 
+`POST /api/auth/signup|login|logout` · `GET/PUT /api/me` · `GET /api/gmail/connect` ·
 `GET/POST /api/watches` · `PUT/DELETE /api/watches/{id}` · `POST /api/watches/{id}/check`
-· `GET /api/watches/{id}/listings?sort=total|value|distance|newest&include_hidden=`
+· `GET /api/watches/{id}/listings?sort=total|value|distance|newest&site=Walmart&include_hidden=`
 · `GET /api/watches/{id}/history` · `GET /api/alerts?since_id=` · `GET /api/sources`
 
 ## Tests
@@ -82,5 +119,6 @@ sniper/
   alerts.py     ntfy + Discord
   db.py         SQLite
   app.py        FastAPI + serves static/index.html
-  sources/      ebay.py, bestbuy.py, demo.py (add yours here)
+  security.py   password hashing, sessions, token encryption
+  sources/      ebay, bestbuy, walmart, reverb, etsy, gmail (alert emails), demo
 ```

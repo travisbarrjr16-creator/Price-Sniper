@@ -5,13 +5,31 @@ import json
 import os
 import sqlite3
 import threading
+from datetime import timedelta
 from typing import Optional
 
-from .models import Watch, utcnow
+from . import security
+from .models import User, Watch, utcnow
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    pw_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    ntfy_topic TEXT,
+    discord_webhook TEXT,
+    gmail_email TEXT,
+    gmail_token TEXT              -- encrypted refresh token
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS watches (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
     data TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
@@ -63,9 +81,73 @@ class DB:
         self.lock = threading.Lock()
         with self.lock:
             self.conn.executescript(SCHEMA)
+            cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(watches)")}
+            if "user_id" not in cols:   # databases from before accounts existed
+                self.conn.execute("ALTER TABLE watches ADD COLUMN user_id INTEGER")
+            self.conn.commit()
+
+    # --- users & sessions --------------------------------------------------
+    def _row_to_user(self, r: sqlite3.Row) -> User:
+        return User(id=r["id"], email=r["email"], ntfy_topic=r["ntfy_topic"],
+                    discord_webhook=r["discord_webhook"], gmail_email=r["gmail_email"])
+
+    def create_user(self, email: str, password: str) -> Optional[User]:
+        try:
+            with self.lock, self.conn:
+                cur = self.conn.execute(
+                    "INSERT INTO users (email, pw_hash, created_at) VALUES (?, ?, ?)",
+                    (email.strip(), security.hash_password(password), utcnow().isoformat()),
+                )
+        except sqlite3.IntegrityError:
+            return None
+        return self.get_user(cur.lastrowid)
+
+    def get_user(self, uid: int) -> Optional[User]:
+        r = self.conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        return self._row_to_user(r) if r else None
+
+    def authenticate(self, email: str, password: str) -> Optional[User]:
+        r = self.conn.execute("SELECT * FROM users WHERE email=?", (email.strip(),)).fetchone()
+        if r and security.verify_password(password, r["pw_hash"]):
+            return self._row_to_user(r)
+        security.verify_password(password, security.hash_password("timing-equalizer"))
+        return None
+
+    def update_user_settings(self, uid: int, ntfy_topic: Optional[str], discord_webhook: Optional[str]) -> User:
+        with self.lock, self.conn:
+            self.conn.execute("UPDATE users SET ntfy_topic=?, discord_webhook=? WHERE id=?",
+                              (ntfy_topic, discord_webhook, uid))
+        return self.get_user(uid)
+
+    def set_gmail(self, uid: int, email: Optional[str], refresh_token: Optional[str]) -> None:
+        enc = security.encrypt(refresh_token) if refresh_token else None
+        with self.lock, self.conn:
+            self.conn.execute("UPDATE users SET gmail_email=?, gmail_token=? WHERE id=?", (email, enc, uid))
+
+    def get_gmail_token(self, uid: int) -> Optional[str]:
+        r = self.conn.execute("SELECT gmail_token FROM users WHERE id=?", (uid,)).fetchone()
+        return security.decrypt(r["gmail_token"]) if r and r["gmail_token"] else None
+
+    def create_session(self, uid: int, days: int = 30) -> str:
+        token = security.new_token()
+        exp = (utcnow() + timedelta(days=days)).isoformat()
+        with self.lock, self.conn:
+            self.conn.execute("INSERT INTO sessions VALUES (?, ?, ?)", (security.token_digest(token), uid, exp))
+        return token
+
+    def session_user(self, token: str) -> Optional[User]:
+        r = self.conn.execute("SELECT user_id, expires_at FROM sessions WHERE token_hash=?",
+                              (security.token_digest(token),)).fetchone()
+        if not r or r["expires_at"] < utcnow().isoformat():
+            return None
+        return self.get_user(r["user_id"])
+
+    def delete_session(self, token: str) -> None:
+        with self.lock, self.conn:
+            self.conn.execute("DELETE FROM sessions WHERE token_hash=?", (security.token_digest(token),))
 
     # --- watches -----------------------------------------------------------
-    _WATCH_META = ("id", "active", "created_at", "last_checked_at", "last_error")
+    _WATCH_META = ("id", "user_id", "active", "created_at", "last_checked_at", "last_error")
 
     def _row_to_watch(self, r: sqlite3.Row) -> Watch:
         d = json.loads(r["data"])
@@ -77,8 +159,8 @@ class DB:
         data = {k: v for k, v in w.to_dict().items() if k not in self._WATCH_META}
         with self.lock, self.conn:
             cur = self.conn.execute(
-                "INSERT INTO watches (data, active, created_at) VALUES (?, ?, ?)",
-                (json.dumps(data), int(w.active), utcnow().isoformat()),
+                "INSERT INTO watches (user_id, data, active, created_at) VALUES (?, ?, ?, ?)",
+                (w.user_id, json.dumps(data), int(w.active), utcnow().isoformat()),
             )
         return self.get_watch(cur.lastrowid)
 
@@ -95,8 +177,13 @@ class DB:
         r = self.conn.execute("SELECT * FROM watches WHERE id=?", (wid,)).fetchone()
         return self._row_to_watch(r) if r else None
 
-    def list_watches(self) -> list[Watch]:
-        return [self._row_to_watch(r) for r in self.conn.execute("SELECT * FROM watches ORDER BY id")]
+    def list_watches(self, user_id: Optional[int] = None) -> list[Watch]:
+        """All watches (for the background loop), or one user's."""
+        if user_id is None:
+            rows = self.conn.execute("SELECT * FROM watches ORDER BY id")
+        else:
+            rows = self.conn.execute("SELECT * FROM watches WHERE user_id=? ORDER BY id", (user_id,))
+        return [self._row_to_watch(r) for r in rows]
 
     def delete_watch(self, wid: int) -> None:
         with self.lock, self.conn:
@@ -151,10 +238,16 @@ class DB:
                 (wid, key, reason, title, total, url, utcnow().isoformat()),
             )
 
-    def list_alerts(self, since_id: int = 0, limit: int = 50) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM alerts WHERE id>? ORDER BY id DESC LIMIT ?", (since_id, limit)
-        ).fetchall()
+    def list_alerts(self, user_id: Optional[int] = None, since_id: int = 0, limit: int = 50) -> list[dict]:
+        if user_id is None:
+            rows = self.conn.execute(
+                "SELECT * FROM alerts WHERE id>? ORDER BY id DESC LIMIT ?", (since_id, limit)
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                """SELECT a.* FROM alerts a JOIN watches w ON w.id = a.watch_id
+                   WHERE w.user_id=? AND a.id>? ORDER BY a.id DESC LIMIT ?""", (user_id, since_id, limit)
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def add_snapshot(self, wid: int, ts: str, bucket: str, min_total: float, median_total: float, count: int) -> None:
