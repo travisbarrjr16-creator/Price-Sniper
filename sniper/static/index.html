@@ -51,7 +51,7 @@ header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; bord
 header h1 { font-size: 16px; margin: 0; }
 header .status { color: var(--muted); font-size: 12px; margin-left: auto; text-align: right; }
 .layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 16px; max-width: 1280px; margin: 0 auto; }
-@media (max-width: 820px) { .layout { grid-template-columns: 1fr; } main { order: -1; } }
+@media (max-width: 820px) { .layout { grid-template-columns: minmax(0, 1fr); } main { order: -1; } }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); margin: 0 0 10px; }
 label { display: block; font-size: 12px; color: var(--text-2); margin: 8px 0 3px; }
@@ -70,9 +70,9 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .watch .q { font-weight: 600; }
 .watch .meta { font-size: 12px; color: var(--muted); }
 .stack > * + * { margin-top: 16px; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(125px, 100%), 1fr)); gap: 10px; }
 .tile .k { font-size: 12px; color: var(--text-2); }
-.tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.tile .v { font-size: clamp(18px, 5vw, 22px); overflow-wrap: anywhere; font-weight: 650; font-variant-numeric: tabular-nums; }
 .tile .s { font-size: 12px; color: var(--muted); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
@@ -140,6 +140,17 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .quick a { padding: 4px 10px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface-2);
   color: var(--text); text-decoration: none; white-space: nowrap; }
 .quick a:hover { border-color: var(--accent); }
+.list.compact { gap: 4px; }
+.list.compact .item { padding: 6px 10px; gap: 10px; grid-template-columns: 40px minmax(0, 1fr) auto; }
+.list.compact .item img, .list.compact .item .ph { width: 40px; height: 40px; font-size: 12px; }
+.list.compact .item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list.compact .item .acts, .list.compact .item .found, .list.compact .item .bd { display: none; }
+.list.compact .item .total { font-size: 16px; }
+.list.compact .item a.open { padding: 3px 8px; font-size: 12px; }
+@media (max-width: 560px) { .list.compact .item { grid-template-columns: 40px minmax(0, 1fr); } .list.compact .item .price { gap: 8px; } }
+.item[hidden] { display: none; }
+.item > div { min-width: 0; }          /* long titles wrap/ellipsize instead of widening the page */
+#q { flex: 1 1 160px; min-width: 0; }
 .item .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .item .acts button { font-size: 12px; padding: 4px 9px; min-height: 28px; }      /* WCAG 2.2 target size */
 .item.dismissed { opacity: .55; }
@@ -319,7 +330,8 @@ const SITE_ABBR = {"eBay": "eB", "eBay Local": "eB", "Best Buy": "BB", "Walmart"
   "r/buildapcsales": "r/", "r/hardwareswap": "r/", "Craigslist": "CL", "OfferUp": "OU", "Mercari": "Me", "FB Marketplace": "FB"};
 const COND = {new: "New", open_box: "Open box", refurbished: "Refurb", used: "Used", parts: "For parts"};
 const DEAL = {great: "Great deal", good: "Good price", fair: "Typical price", high: "Above typical", suspicious: "Too good to be true"};
-let state = {watches: [], sel: null, sort: "total", showHidden: false, showMine: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
+let state = {q: "", compact: (() => { try { return localStorage.getItem("compact") === "1"; } catch { return false; } })(),
+  watches: [], sel: null, sort: "total", showHidden: false, showMine: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
 try { state.sort = localStorage.getItem("sort") || "total"; } catch {}
 
 const api = async (path, opts = {}) => {
@@ -463,11 +475,14 @@ async function renderMainInner(w) {
           <option value="">All sites (${Object.values(siteCounts).reduce((a, b) => a + b, 0)})</option>
           ${Object.entries(siteCounts).map(([k, n]) => `<option value="${esc(k)}" ${state.site === k ? "selected" : ""}>${esc(k)} (${n})</option>`).join("")}
         </select>
+        <input type="search" id="q" placeholder="Search these results" value="${esc(state.q)}" aria-label="Search these results">
+        <button type="button" id="compact" aria-pressed="${state.compact}" title="Shorter cards, more listings on screen">${state.compact ? "☰ Compact: on" : "☰ Compact"}</button>
         <label class="checks" style="margin:0"><label><input type="checkbox" id="sh" ${state.showHidden ? "checked" : ""}> Show hidden scams</label></label>
         ${res.hidden_by_you ? `<label class="checks" style="margin:0"><label><input type="checkbox" id="sm" ${state.showMine ? "checked" : ""}> Show ${res.hidden_by_you} you hid</label></label>` : ""}
         <span class="filtered">${st ? `${st.fetched} fetched → ${st.matched} matched${rej ? ` (filtered: ${esc(rej)})` : ""}${st.hidden_risky ? `, ${st.hidden_risky} flagged risky` : ""}` : ""}</span>
       </div>
-      <div class="list">${items.length ? items.map(itemHTML).join("") : `<div class="empty">${state.site ? `Nothing from ${esc(state.site)} right now.` : "No matching listings right now. The watch keeps checking."}</div>`}</div>
+      <div class="list ${state.compact ? "compact" : ""}" id="list">${items.length ? items.map(itemHTML).join("") : `<div class="empty">${state.site ? `Nothing from ${esc(state.site)} right now.` : "No matching listings right now. The watch keeps checking."}</div>`}
+        <div class="empty" id="noMatch" hidden>No listings here match that search.</div></div>
     </div>`;
 
   $("#chk").onclick = async e => { e.target.disabled = true; e.target.textContent = "Checking…"; await api(`/api/watches/${w.id}/check`, {method: "POST"}).catch(x => alert(x.message)); refresh(); };
@@ -495,6 +510,9 @@ async function renderMainInner(w) {
     renderMain();
   });
   $("#site").onchange = e => { state.site = e.target.value; renderMain(); };
+  $("#compact").onclick = () => { state.compact = !state.compact; try { localStorage.setItem("compact", state.compact ? "1" : "0"); } catch {} renderMain(); };
+  $("#q").oninput = e => { state.q = e.target.value; filterList(); };
+  filterList();
   drawChart(hist.snapshots, w);
 }
 
@@ -537,6 +555,18 @@ function toast(html, undo) {
   $("#toasts").append(t); setTimeout(() => t.remove(), 6000);
 }
 
+// Instant client-side search within the listings on screen (every word must appear)
+function filterList() {
+  const words = state.q.toLowerCase().split(/\s+/).filter(Boolean);
+  let shown = 0;
+  document.querySelectorAll("#list .item").forEach(el => {
+    const ok = words.every(wd => el.dataset.text.includes(wd));
+    el.hidden = !ok; shown += ok;
+  });
+  const none = $("#noMatch");
+  if (none) none.hidden = !(words.length && !shown);
+}
+
 function itemHTML(i) {
   const ship = i.local_pickup ? "local pickup" : i.shipping_estimated ? "+ship est." : i.shipping ? `+${money(i.shipping)} ship` : "free ship";
   const deal = i.deal ? `<span class="badge ${i.deal.label}" title="Typical: ${money(i.deal.median)} (${i.deal.n} listings)">${DEAL[i.deal.label]} ${i.deal.pct_vs_median > 0 ? "+" : ""}${Math.round(i.deal.pct_vs_median)}%</span>` : "";
@@ -556,7 +586,8 @@ function itemHTML(i) {
   const dismissBtn = i.dismissed
       ? `<button data-hide="listing" data-undo="1" data-value="${esc(i.key)}">Show again</button>`
       : `<button data-hide="listing" data-value="${esc(i.key)}" data-label="${esc(i.title.slice(0, 60))}" title="Hide this listing">✕ Not interested</button>`;
-  return `<div class="item ${i.hidden ? "hidden" : ""} ${i.dismissed || i.muted ? "dismissed" : ""}">
+  const text = `${i.title} ${i.source} ${i.seller_name || ""} ${i.location || ""} ${COND[i.condition] || ""}`.toLowerCase();
+  return `<div class="item ${i.hidden ? "hidden" : ""} ${i.dismissed || i.muted ? "dismissed" : ""}" data-text="${esc(text)}">
     ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : `<div class="ph" aria-hidden="true">${esc(SITE_ABBR[i.source] || i.site.slice(0, 2))}</div>`}
     <div>
       <div class="t">${isNew ? '<span class="badge new">NEW</span> ' : ""}${esc(i.title)}</div>
