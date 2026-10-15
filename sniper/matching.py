@@ -17,7 +17,7 @@ VARIANT_SUFFIXES = {
 }
 # ...but only when written stuck to the number ("7600X"), not "RTX 4060 x2 fans"
 GLUED_SUFFIXES = {"x", "k", "kf", "f", "ks", "g", "x3d"}
-# "fe" (Founders Edition) is the same GPU, so it is not treated as a variant.
+# "fe" (Founders Edition) is the same GPU, so it is not a variant in GPU searches ("Galaxy S23 FE" still is).
 NON_VARIANT = {"fe"}
 
 # Titles that are almost never the actual item.
@@ -182,6 +182,7 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
         if why := whole_system_reason(listing.title, watch.query):
             return False, why
         query_set = set(query_tokens)
+        is_gpu = part_kind(watch.query) == "gpu"      # "FE" = Founders Edition (same card); on phones "S23 FE" is another model
         for i, tok in enumerate(title_tokens):
             # "4070 Super" when you searched "4070"; also "15 Pro Max" when you searched "15 Pro"
             if (tok.isdigit() or tok in VARIANT_SUFFIXES) and tok in query_set and i + 1 < len(title_tokens):
@@ -195,7 +196,7 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
                 if (nxt == "plus" and i + 2 < len(title_tokens) and title_tokens[i + 2] in _PLUS_EXTRAS
                         and (tok in GLUED_SUFFIXES or re.search(rf"(?<![a-z0-9]){tok}\s+\+", low))):
                     continue        # "7600X Plus free cooler", "RTX 4060 + free game" (not "iPhone 15 Plus case", "S24+")
-                if nxt in VARIANT_SUFFIXES and nxt not in NON_VARIANT and nxt not in query_set:
+                if nxt in VARIANT_SUFFIXES and not (nxt in NON_VARIANT and is_gpu) and nxt not in query_set:
                     return False, f"variant '{tok} {nxt}'"
 
     if listing.condition not in watch.conditions:

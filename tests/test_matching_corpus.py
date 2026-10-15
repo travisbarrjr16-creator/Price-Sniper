@@ -93,6 +93,8 @@ CASES = [
     ('ryzen 7 7700', 'AMD Ryzen 7 7700 8-Core 16-Thread (AMD Radeon Graphics)', True),
     ('iphone 14', 'iPhone 14 Pro 128GB', False),
     ('galaxy s23', 'Samsung Galaxy S23 5G 128GB', True),
+    ('galaxy s23', 'Samsung Galaxy S23 FE 128GB', False),
+    ('rtx 3080', 'NVIDIA RTX 3080 FE 10GB', True),
     ('rtx 3060 12gb', 'MSI RTX 3060 12GB Ventus 2X', True),
     ('rtx 3060', 'RTX 3060 Ti 8GB', False),
     ('rtx 2070', 'RTX 2070 Super', False),
