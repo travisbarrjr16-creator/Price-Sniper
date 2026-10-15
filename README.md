@@ -5,7 +5,9 @@ within 40 miles). It keeps searching every source in the background, works out
 what you'd actually pay, filters out junk and scams, and pings your phone when
 something good shows up.
 
-> **Running it for yourself and a few friends?** Follow **[HOME_SETUP.md](HOME_SETUP.md)**: a free, private setup on a computer at home, one setup script for Windows/Mac/Linux.
+> **Running it for yourself and a few friends?**
+> - On a computer at home that stays on: **[HOME_SETUP.md](HOME_SETUP.md)** (one setup script for Windows/Mac/Linux)
+> - On Google Cloud's free server: **[CLOUD_SETUP.md](CLOUD_SETUP.md)** (watch out for the disk-type trap and the possible IP fee)
 
 ## Quick start
 
