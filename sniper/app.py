@@ -104,6 +104,10 @@ class HideIn(BaseModel):
     label: Optional[str] = Field(None, max_length=200)
 
 
+class DeleteMeIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
 class ResetIn(BaseModel):
     token: str = Field(min_length=10, max_length=200)
     password: str = Field(min_length=8, max_length=200)
@@ -216,11 +220,42 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     def update_me(body: SettingsIn, user: User = Depends(current_user)):
         topic = (body.ntfy_topic or "").strip() or None
         hook = (body.discord_webhook or "").strip() or None
+        # Anyone who guesses an ntfy.sh topic can read it, so new topics must be long enough to be unguessable.
+        if topic and topic != user.ntfy_topic and not (valid_ntfy_topic(topic) and len(topic) >= 12):
+            raise HTTPException(422, "ntfy topic: at least 12 letters, numbers, - or _ (use Generate for a safe one)")
         if not valid_ntfy_topic(topic):
             raise HTTPException(422, "ntfy topic: 6-64 letters, numbers, - or _")
         if not valid_discord_webhook(hook):
             raise HTTPException(422, "Discord webhook must be a https://discord.com/api/webhooks/... URL")
         return db.update_user_settings(user.id, topic, hook).public()
+
+    @app.post("/api/me/delete")
+    def delete_me(body: DeleteMeIn, request: Request, response: Response, user: User = Depends(current_user)):
+        if not db.authenticate(user.email, body.password):
+            raise HTTPException(401, "wrong password")
+        db.delete_user(user.id)
+        response.delete_cookie(COOKIE)
+        return {"ok": True}
+
+    @app.get("/privacy")
+    def privacy():
+        return FileResponse(STATIC / "privacy.html")
+
+    last_test: dict[int, float] = {}
+
+    @app.post("/api/me/test-alert")
+    async def test_alert(user: User = Depends(current_user)):
+        """Send a sample notification to the user's own channels, so they can check the setup works."""
+        if not (user.ntfy_topic or user.discord_webhook):
+            raise HTTPException(400, "Add an ntfy topic or Discord webhook first, then Save")
+        if time.time() - last_test.get(user.id, 0) < 20:
+            raise HTTPException(429, "Wait a few seconds before sending another test")
+        last_test[user.id] = time.time()
+        async with httpx.AsyncClient(timeout=15) as client:
+            await watcher.notifier.send(
+                client, "🎯 Price Sniper test", "If you can read this, deal alerts will reach you here. "
+                "Tap to open the app.", public_url(), ntfy_topic=user.ntfy_topic, discord_webhook=user.discord_webhook)
+        return {"ok": True, "sent_to": [n for n, on in (("ntfy", user.ntfy_topic), ("Discord", user.discord_webhook)) if on]}
 
     @app.put("/api/me/quiet")
     def update_quiet(body: QuietIn, user: User = Depends(current_user)):

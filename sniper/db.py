@@ -326,6 +326,15 @@ class DB:
             for t in ("listings", "alerts", "snapshots"):
                 self.conn.execute(f"DELETE FROM {t} WHERE watch_id=?", (wid,))
 
+    def delete_user(self, uid: int) -> None:
+        """Remove an account and everything that belongs to it."""
+        for w in self.list_watches(uid):
+            self.delete_watch(w.id)
+        with self.lock, self.conn:
+            for t in ("sessions", "password_resets", "user_hidden"):
+                self.conn.execute(f"DELETE FROM {t} WHERE user_id=?", (uid,))
+            self.conn.execute("DELETE FROM users WHERE id=?", (uid,))
+
     # --- listings ----------------------------------------------------------
     def get_listing_rows(self, wid: int, active_only: bool = True) -> list[sqlite3.Row]:
         q = "SELECT * FROM listings WHERE watch_id=?" + (" AND active=1" if active_only else "")

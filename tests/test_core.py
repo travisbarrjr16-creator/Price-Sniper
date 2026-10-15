@@ -570,3 +570,26 @@ def test_purge_and_backup(tmp_path, monkeypatch):
     with tarfile.open(archive) as tar:
         assert {"sniper.db", ".env"} <= set(tar.getnames())
     assert oct(archive.stat().st_mode)[-3:] == "600"
+
+
+def test_settings_extras_privacy_delete_and_test_alert(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch); _signup(c, "a@example.com")
+    assert c.put("/api/me", json={"ntfy_topic": "short-topic"}).status_code == 422          # 11 chars: guessable
+    assert c.put("/api/me", json={"ntfy_topic": "sniper-k3x9v2q7m4"}).status_code == 200
+    sent = []
+
+    async def fake_send(client, title, msg, url, **kw):
+        sent.append((title, kw.get("ntfy_topic")))
+    c.app.state.watcher.notifier.send = fake_send
+    r = c.post("/api/me/test-alert")
+    assert r.status_code == 200 and r.json()["sent_to"] == ["ntfy"]
+    assert sent == [("🎯 Price Sniper test", "sniper-k3x9v2q7m4")]
+    assert c.post("/api/me/test-alert").status_code == 429                                  # no spamming
+    assert "Price Sniper privacy" in c.get("/privacy").text
+    c.post("/api/watches", json={"query": "RTX 4060"})
+    assert c.post("/api/me/delete", json={"password": "wrong"}).status_code == 401
+    assert c.post("/api/me/delete", json={"password": "hunter2hunter2"}).status_code == 200
+    assert c.get("/api/me").status_code == 401
+    db = c.app.state.db
+    assert db.find_user_by_email("a@example.com") is None and db.list_watches() == []
+    _signup(c, "a@example.com")                                                                # email is free again

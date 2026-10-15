@@ -170,6 +170,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
         <button class="linkbtn" type="button" id="authToggle">Create an account</button>
       </div>
       <div style="margin-top:10px"><button class="linkbtn" type="button" id="forgotBtn">Forgot password?</button></div>
+      <div class="hint" style="margin-top:8px"><a href="/privacy" style="color:inherit">Privacy</a></div>
       <div class="hint" id="forgotHelp" hidden>Ask the person who runs this app for a reset link. It opens a page here where you choose a new password.</div>
     </form>
     <form id="resetForm" hidden>
@@ -192,8 +193,10 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
   <h2>Alerts & accounts</h2>
   <form id="settingsForm" method="dialog">
     <label>ntfy topic (phone push)</label>
-    <input name="ntfy_topic" placeholder="sniper-7f3k9q">
-    <div class="hint">Install the ntfy app, subscribe to a hard-to-guess topic, enter it here.</div>
+    <div style="display:flex; gap:6px"><input name="ntfy_topic" placeholder="sniper-k3x9v2q7m4pw" autocomplete="off" spellcheck="false">
+      <button type="button" id="genTopic" title="Make a random, hard-to-guess topic">Generate</button></div>
+    <div class="hint">1. Install the free <b>ntfy</b> app. 2. Tap Generate, then Save. 3. In ntfy, subscribe to that exact topic.
+      Anyone who knows the topic name can read it, so keep it random.</div>
     <label>Discord webhook (optional)</label>
     <input name="discord_webhook" placeholder="https://discord.com/api/webhooks/...">
     <label style="margin-top:14px">Quiet hours (no phone buzzing)</label>
@@ -209,6 +212,14 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
     <div id="mutedBox"></div>
     <label style="margin-top:14px">Email alerts from Craigslist, OfferUp, Mercari, Facebook…</label>
     <div id="gmailBox"></div>
+    <details style="margin-top:14px"><summary>Account</summary>
+      <div class="hint" style="margin:6px 0"><a href="/privacy" target="_blank" rel="noopener">What's stored and who can see it</a></div>
+      <label>Delete my account (type your password)</label>
+      <div style="display:flex; gap:6px"><input type="password" id="delPw" autocomplete="current-password">
+        <button type="button" id="delMe" style="color:var(--bad); border-color:var(--bad)">Delete</button></div>
+      <div class="hint">Removes your account, watches, alerts and settings right away. This can't be undone.</div>
+    </details>
+    <div style="margin-top:10px"><button type="button" id="testAlert">🔔 Send test notification</button> <span class="hint" id="testAlertMsg"></span></div>
     <div class="err" id="settingsErr" style="margin-top:8px"></div>
     <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end">
       <button type="button" id="settingsClose">Close</button>
@@ -654,6 +665,23 @@ async function renderMuted() {
   });
 }
 $("#settingsClose").onclick = () => $("#settings").close();
+$("#delMe").onclick = async () => {
+  if (!confirm("Delete your account and everything in it? This can't be undone.")) return;
+  try {
+    await api("/api/me/delete", {method: "POST", body: JSON.stringify({password: $("#delPw").value})});
+    $("#settings").close(); $("#logoutBtn").click();
+  } catch (err) { $("#settingsErr").textContent = err.message; }
+};
+$("#genTopic").onclick = () => {
+  const abc = "abcdefghijkmnpqrstuvwxyz23456789", rnd = crypto.getRandomValues(new Uint8Array(14));
+  $("#settingsForm").ntfy_topic.value = "sniper-" + [...rnd].map(b => abc[b % abc.length]).join("");
+};
+$("#testAlert").onclick = async () => {
+  const msg = $("#testAlertMsg");
+  msg.textContent = "Sending…";
+  try { const r = await api("/api/me/test-alert", {method: "POST"}); msg.textContent = "Sent to " + r.sent_to.join(" + ") + ". Check your phone."; }
+  catch (err) { msg.textContent = err.message; }
+};
 $("#settingsForm").addEventListener("submit", async e => {
   e.preventDefault();
   const f = e.target;

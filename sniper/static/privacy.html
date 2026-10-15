@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · Price Sniper</title>
+<style>
+:root { color-scheme: light; --bg: #f6f6f4; --surface: #fcfcfb; --text: #0b0b0b; --text-2: #52514e; --border: #dddcd6; --accent: #2a78d6; }
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --bg: #121211; --surface: #1a1a19; --text: #f0efec; --text-2: #c3c2b7; --border: #34332f; --accent: #3987e5; } }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; }
+h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 22px 0 6px; }
+p, li { color: var(--text-2); } a { color: var(--accent); } ul { padding-left: 20px; }
+</style>
+</head>
+<body><main><div class="card">
+<h1>🎯 Price Sniper privacy</h1>
+<p>Price Sniper is a small, private deal-watching app run by one person for themselves and a few friends. It isn't a company and doesn't sell or share your data.</p>
+
+<h2>What's stored</h2>
+<ul>
+  <li><b>Your account:</b> your email and your password, stored only as a scrambled hash that can't be turned back into the password.</li>
+  <li><b>Your watches and their results:</b> what you search for, your price limits, ZIP code and radius, and the public listings the app found for you.</li>
+  <li><b>Your settings:</b> ntfy topic, Discord webhook, quiet hours, muted sellers, hidden listings.</li>
+  <li><b>Gmail (only if you connect it):</b> a read-only access key, stored encrypted. The app only reads marketplace alert emails (Craigslist, OfferUp, …) to find listings. It never sends, deletes, or changes email.</li>
+</ul>
+
+<h2>Who can see it</h2>
+<ul>
+  <li>Other users <b>can't</b> see your watches, results, alerts, settings, or email.</li>
+  <li>The person who runs the server can technically access the server's files, the same as any self-hosted app.</li>
+</ul>
+
+<h2>What's sent to other services</h2>
+<ul>
+  <li><b>Marketplaces</b> (eBay, Best Buy, Reddit, …) get your search words, and for eBay local pickup, your ZIP code and radius. They don't get your name or email.</li>
+  <li><b>ntfy / Discord</b> get the text of your deal alerts, if you set them up.</li>
+  <li><b>Google</b> is involved only if you connect Gmail.</li>
+</ul>
+<p>Listing details such as titles, prices, and seller names come from those marketplaces' public listings and belong to them. Tap <b>Open ↗</b> to buy on the marketplace itself.</p>
+
+<h2>How long it's kept</h2>
+<p>Listings that are gone are deleted after 60 days, price history after a year, and alerts after 180 days. The server keeps rotating backups for 14 days.</p>
+
+<h2>Deleting your data</h2>
+<p>Settings → <b>Delete my account</b> removes your account and everything above right away. It disappears from backups as they rotate out within 14 days. You can also disconnect Gmail at any time in Settings, or revoke it from your Google account.</p>
+
+<p style="margin-top:24px"><a href="/">← Back to Price Sniper</a></p>
+</div></main></body>
+</html>
