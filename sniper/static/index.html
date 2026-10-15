@@ -718,7 +718,10 @@ $("#settingsBtn").onclick = () => {
   const f = $("#settingsForm"); f.ntfy_topic.value = state.me.ntfy_topic || ""; f.discord_webhook.value = state.me.discord_webhook || "";
   f.quiet_start.value = state.me.quiet_start || ""; f.quiet_end.value = state.me.quiet_end || "";
   f.quiet_allow_urgent.checked = state.me.quiet_allow_urgent !== false;
-  $("#settingsErr").textContent = ""; renderGmail(); renderMuted(); renderUsage(); $("#settings").showModal();
+  const pe = state.me.push_error;
+  $("#settingsErr").textContent = pe ? `⚠ Last alert wasn't delivered (${ago(pe.at)}): ` +
+    Object.entries(pe.errors).map(([k, v]) => `${k} ${v}`).join("; ") : "";
+  renderGmail(); renderMuted(); renderUsage(); $("#settings").showModal();
 };
 async function renderUsage() {
   const box = $("#usageBox"), rows = await api("/api/usage").catch(() => []);

@@ -329,8 +329,10 @@ class Watcher:
         if user and user.in_quiet_hours(utcnow()) and not (urgent and user.quiet_allow_urgent):
             log.info("quiet hours for user %s: %d alert(s) kept in app, no push", user.id, len(ranked))
             return
-        await self.notifier.send(
+        results = await self.notifier.send(
             client, title, msg, l.url, urgent=urgent,       # tapping opens the top deal
             ntfy_topic=user.ntfy_topic if user else None,
             discord_webhook=user.discord_webhook if user else None,
         )
+        if user:
+            self.db.record_push_result(user.id, results or {})

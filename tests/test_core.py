@@ -580,6 +580,7 @@ def test_settings_extras_privacy_delete_and_test_alert(tmp_path, monkeypatch):
 
     async def fake_send(client, title, msg, url, **kw):
         sent.append((title, kw.get("ntfy_topic")))
+        return {"ntfy": None}
     c.app.state.watcher.notifier.send = fake_send
     r = c.post("/api/me/test-alert")
     assert r.status_code == 200 and r.json()["sent_to"] == ["ntfy"]
@@ -620,3 +621,19 @@ def test_only_one_process_runs_the_watches(tmp_path):
         assert asyncio.run(second()) is False                     # a second copy only serves the page
     finally:
         proc.kill()
+
+
+def test_failed_push_is_reported(tmp_path, monkeypatch):
+    import httpx
+    from sniper.alerts import Notifier
+    c = _client(tmp_path, monkeypatch); _signup(c)
+    c.put("/api/me", json={"ntfy_topic": "sniper-k3x9v2q7m4"})
+    n = Notifier()
+
+    async def send(client, *a, **kw):        # real Notifier logic against a fake ntfy that says "429"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(429))) as fake:
+            return await Notifier.send(n, fake, *a, **kw)
+    c.app.state.watcher.notifier.send = send
+    r = c.post("/api/me/test-alert")
+    assert r.status_code == 502 and "rate limited" in r.json()["detail"]
+    assert "rate limited" in c.get("/api/me").json()["push_error"]["errors"]["ntfy"]

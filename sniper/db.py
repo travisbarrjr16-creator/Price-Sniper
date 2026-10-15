@@ -249,6 +249,15 @@ class DB:
         with self.lock, self.conn:
             self.conn.execute("UPDATE users SET gmail_email=?, gmail_token=? WHERE id=?", (email, enc, uid))
 
+    def record_push_result(self, uid: int, results: dict) -> None:
+        """Remember the latest phone/Discord delivery problem so Settings can show it (cleared on success)."""
+        failed = {k: v for k, v in results.items() if v}
+        self.set_setting(f"push_error:{uid}", json.dumps({"at": utcnow().isoformat(), "errors": failed}) if failed else None)
+
+    def push_error(self, uid: int) -> Optional[dict]:
+        raw = self.get_setting(f"push_error:{uid}")
+        return json.loads(raw) if raw else None
+
     def expire_gmail(self, uid: int) -> None:
         """Keep the address (so the app can say "reconnect name@gmail.com") but drop the dead token."""
         with self.lock, self.conn:

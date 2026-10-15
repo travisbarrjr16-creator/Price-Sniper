@@ -215,6 +215,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     def me(user: User = Depends(current_user)):
         return {**user.public(), "gmail_available": bool(gmail_source and gmail_source.configured()),
                 "gmail_connected": db.gmail_connected(user.id),
+                "push_error": db.push_error(user.id),
                 "invite_required": bool(os.getenv("SNIPER_INVITE_CODE"))}
 
     @app.put("/api/me")
@@ -263,10 +264,15 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
             raise HTTPException(429, "Wait a few seconds before sending another test")
         last_test[user.id] = time.time()
         async with httpx.AsyncClient(timeout=15) as client:
-            await watcher.notifier.send(
+            results = await watcher.notifier.send(
                 client, "🎯 Price Sniper test", "If you can read this, deal alerts will reach you here. "
                 "Tap to open the app.", public_url(), ntfy_topic=user.ntfy_topic, discord_webhook=user.discord_webhook)
-        return {"ok": True, "sent_to": [n for n, on in (("ntfy", user.ntfy_topic), ("Discord", user.discord_webhook)) if on]}
+        results = results or {}
+        db.record_push_result(user.id, results)
+        failed = {k: v for k, v in results.items() if v}
+        if failed:
+            raise HTTPException(502, "Not delivered: " + "; ".join(f"{k} {v}" for k, v in failed.items()))
+        return {"ok": True, "sent_to": [k for k in results] or ["(none)"]}
 
     @app.put("/api/me/quiet")
     def update_quiet(body: QuietIn, user: User = Depends(current_user)):
