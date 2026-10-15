@@ -22,11 +22,22 @@ if [[ -z "$PY" ]] || ! "$PY" -c 'import sys; sys.exit(sys.version_info < (3, 10)
 fi
 "$PY" --version
 
+# Small servers (like Google Cloud's free e2-micro, 1 GB RAM) can run out of memory installing packages.
+if [[ "$(uname)" == "Linux" ]] && [[ -r /proc/meminfo ]]; then
+  MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+  SWAP_MB=$(awk '/SwapTotal/ {print int($2/1024)}' /proc/meminfo)
+  if (( MEM_MB < 1500 && SWAP_MB < 512 )); then
+    say "Low memory (${MEM_MB} MB, no swap). If the install gets killed, add a 2 GB swap file first:"
+    echo "  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile"
+    echo "  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab"
+  fi
+fi
+
 # --- 2. App + dependencies in a private folder (.venv) -------------------------
 say "Installing Price Sniper and its dependencies"
 [[ -d .venv ]] || "$PY" -m venv .venv
 .venv/bin/python -m pip install -q --upgrade pip
-.venv/bin/python -m pip install -q -e ".[dev]"
+.venv/bin/python -m pip install -q --no-cache-dir -e ".[dev]"
 
 # --- 3. Settings file (.env) -----------------------------------------------------
 TS_URL=""
