@@ -3,7 +3,7 @@
 Everything below is on the **`overnight-improvements`** branch. Your `main` version is untouched.
 If you like it, tell Claude "merge the overnight branch" (or merge it on GitHub). If not, nothing changes.
 
-**At a glance:** 34 commits · 45 files changed · tests went from 54 → **87** (all passing) · zero accessibility violations · zero errors in a long unattended run.
+**At a glance:** 46 commits · 49 files changed · tests went from 54 → **90** (all passing) · zero accessibility violations · zero errors in a long unattended run.
 
 ---
 
@@ -27,7 +27,14 @@ If you like it, tell Claude "merge the overnight branch" (or merge it on GitHub)
 | 14 | **The database grew forever, with no backups** | Daily cleanup + daily backup (keeps 14) |
 | 15 | **Phone layout scrolled sideways** (long titles, smallest phones) | Checked at 320 / 390 / 768 / 1280 px: no sideways scrolling anywhere |
 | 16 | **Reddit's naming rule**: apps that don't identify themselves get throttled | Uses Reddit's required format (add `REDDIT_USERNAME`) |
-| 17 | Walmart could alert on out-of-stock items; login tracker could grow without limit; a few others | Fixed |
+| 17 | **Foreign prices counted as dollars**: Etsy and Reverb show the *seller's* currency, so £200 looked like $200 | Only US-dollar prices are used |
+| 18 | **A listing with no price showed up as $0**: "lowest ever" plus a fake "hit your target" alert | Listings without a real price are ignored |
+| 19 | **Discord: a listing titled "@everyone" would ping your whole server**; long alerts could cut off the link | Mentions are blocked, and the text gets shortened instead of the link |
+| 20 | **Long phone alerts became a file attachment** (ntfy's 4 KB limit) | Kept under the limit |
+| 21 | **Signed out after 30 days even if you use it daily** | Stays signed in as long as you open it at least once a month |
+| 22 | **"Updating now…" banner could get stuck forever** if an update was announced but never happened | Clears itself 5 minutes after the deadline |
+| 23 | **Quiet hours used the wrong time zone on Windows** (Windows doesn't include the time-zone data Python needs) | Added the `tzdata` package, plus a daylight-saving test |
+| 24 | Walmart could alert on out-of-stock items; login tracker could grow without limit; muted/hidden listings still counted in the watch list; a few others | Fixed |
 
 ## ✨ New and improved (polish + visuals)
 - **🏆 "Lowest ever"** and **NEW** badges (new since your last visit; watches with new finds get a NEW tag too).
@@ -43,9 +50,14 @@ If you like it, tell Claude "merge the overnight branch" (or merge it on GitHub)
 - **Scam check:** also flags "small deposit to hold", money orders, "deployed / overseas" stories and "codes only", and multi-option eBay listings where the price may not be for this item. Honest "no deposits, no holds" wording is *not* flagged.
 - **Accessibility:** passes WCAG 2.2 AA checks (axe) on every screen, in light and dark mode. That covers contrast, labels, tap sizes and keyboard focus.
 - **Security:** security headers, cross-site requests blocked, listing links must be real web links.
+- **Phones:** a *Switch watch* menu and a **＋ New watch** button at the top, so you don't scroll past every result (screenshot 31).
+- **Browser tab** shows unread alerts, e.g. "(3) Price Sniper"; results refresh as soon as you come back to the tab.
+- **Pop-ups** stay open while you point at them, and have a ✕ close button. Screen readers no longer read the update countdown out every second.
 - **Pinned library versions** (`constraints.txt`), so a library update can't break your server by surprise.
 
-Screenshots: `docs/screenshots/25` through `30`.
+Screenshots: `docs/screenshots/25` through `31`.
+
+Also checked: everything installs and passes on **Python 3.11** (the version on Debian 12 / Google Cloud's free server), not just the newest Python.
 
 ## 🔎 Research findings that affect you
 - **Google Cloud may not be 100% free.** Since 2024 Google charges about **$3.60/month for a public IP address**. Some say the free tier covers it, but others got billed. Also, the console's default disk type ("Balanced") **is billed**; you need "Standard". The new **CLOUD_SETUP.md** walks through every setting and has you set a $1 budget alert. ([Google](https://cloud.google.com/vpc/pricing-announce-external-ips), [discussion](https://lowendspirit.com/discussion/comment/26480))
