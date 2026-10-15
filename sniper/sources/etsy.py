@@ -15,6 +15,8 @@ def parse_results(data: dict) -> list[Listing]:
     out = []
     for it in data.get("results", []):
         p = it.get("price") or {}
+        if p.get("currency_code", "USD") != "USD":    # shown in the seller's currency: £200 isn't $200
+            continue
         try:
             price = p["amount"] / (p.get("divisor") or 100)
         except (KeyError, TypeError):

@@ -101,7 +101,8 @@ class EbaySource(Source):
             headers["Authorization"] = f"Bearer {await self._get_token(client)}"
             r = await client.get(SEARCH_URL, headers=headers, params=params)
         r.raise_for_status()
-        return r.json().get("itemSummaries", [])
+        items = r.json().get("itemSummaries", [])
+        return [it for it in items if (it.get("price") or {}).get("currency", "USD") == "USD"]
 
     def _to_listing(self, it: dict, local: bool) -> Listing:
         price = _float((it.get("price") or {}).get("value")) or 0.0

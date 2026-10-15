@@ -28,7 +28,7 @@ def parse_listings(data: dict) -> list[Listing]:
     out = []
     for it in data.get("listings", []):
         price = _amount(it.get("price"))
-        if price is None:
+        if price is None or (it.get("price") or {}).get("currency", "USD") != "USD":   # never count €/£ as $
             continue
         cond = CONDITION_MAP.get(str((it.get("condition") or {}).get("display_name", "")).lower(), "used")
         ship = it.get("shipping") or {}
@@ -63,7 +63,7 @@ class ReverbSource(Source):
         return bool(self.token) or os.getenv("REVERB_ENABLED") == "1"
 
     async def search(self, watch: Watch, client: httpx.AsyncClient) -> list[Listing]:
-        headers = {"Accept": "application/hal+json", "Accept-Version": "3.0"}
+        headers = {"Accept": "application/hal+json", "Accept-Version": "3.0", "X-Display-Currency": "USD"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         params = {"query": watch.query, "per_page": "50"}

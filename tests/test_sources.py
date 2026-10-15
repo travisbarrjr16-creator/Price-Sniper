@@ -190,3 +190,16 @@ def test_gmail_k_prices():
     html = '<a href="https://austin.craigslist.org/sys/d/austin-gaming/7801234999.html">RTX 4090 FE</a> $1.4k'
     (l,) = parse_alert_html(html)
     assert l.price == 1400.0
+
+
+def test_foreign_currency_listings_skipped():
+    from sniper.sources.etsy import parse_results
+    from sniper.sources.reverb import parse_listings
+    etsy = {"results": [
+        {"listing_id": 1, "title": "RTX 4060", "price": {"amount": 20000, "divisor": 100, "currency_code": "GBP"}},
+        {"listing_id": 2, "title": "RTX 4060", "price": {"amount": 25000, "divisor": 100, "currency_code": "USD"}}]}
+    assert [l.source_id for l in parse_results(etsy)] == ["2"]
+    reverb = {"listings": [
+        {"id": 1, "title": "Pedal", "price": {"amount": "100.00", "currency": "EUR"}},
+        {"id": 2, "title": "Pedal", "price": {"amount": "120.00", "currency": "USD"}}]}
+    assert [l.source_id for l in parse_listings(reverb)] == ["2"]
