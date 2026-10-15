@@ -120,6 +120,11 @@ class SettingsIn(BaseModel):
     discord_webhook: Optional[str] = None
 
 
+def _source_and_seller(row) -> tuple[str, str | None]:
+    d = json.loads(row["data"])
+    return d.get("source", ""), d.get("seller_name")
+
+
 def public_url() -> str:
     return os.getenv("PUBLIC_URL", "http://localhost:8000").rstrip("/")
 
@@ -404,8 +409,11 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     @app.get("/api/watches")
     def list_watches(user: User = Depends(current_user)):
         out = []
+        muted, dismissed = db.hidden_sets(user.id)
         for w in db.list_watches(user.id):
-            rows = [r for r in db.get_listing_rows(w.id) if r["risk"] < scoring.RISK_HIDE_THRESHOLD or not w.hide_risky]
+            rows = [r for r in db.get_listing_rows(w.id)
+                    if (r["risk"] < scoring.RISK_HIDE_THRESHOLD or not w.hide_risky) and r["key"] not in dismissed
+                    and seller_key(*_source_and_seller(r)) not in muted]
             best = min(rows, key=lambda r: r["total"], default=None)
             out.append({**w.to_dict(), "count": len(rows), "lowest": best["total"] if best else None,
                         "latest_found": max((r["first_seen"] for r in rows), default=None),

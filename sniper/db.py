@@ -281,8 +281,14 @@ class DB:
     def session_user(self, token: str) -> Optional[User]:
         r = self._read_one("SELECT user_id, expires_at FROM sessions WHERE token_hash=?",
                            (security.token_digest(token),))
-        if not r or r["expires_at"] < utcnow().isoformat():
+        now = utcnow()
+        if not r or r["expires_at"] < now.isoformat():
             return None
+        if r["expires_at"] < (now + timedelta(days=15)).isoformat():
+            # Sliding sessions: people who use the app stay signed in; idle ones expire after 30 days.
+            with self.lock, self.conn:
+                self.conn.execute("UPDATE sessions SET expires_at=? WHERE token_hash=?",
+                                  ((now + timedelta(days=30)).isoformat(), security.token_digest(token)))
         return self.get_user(r["user_id"])
 
     def delete_session(self, token: str) -> None:

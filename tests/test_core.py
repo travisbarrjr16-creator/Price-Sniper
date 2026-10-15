@@ -687,3 +687,21 @@ def test_editing_target_rechecks_known_listings(tmp_path, monkeypatch):
     assert "250 target" in a["reason"]                         # the known $240 listing now alerts once
     asyncio.run(watcher.check(db.get_watch(w["id"])))
     assert len(db.list_alerts()) == 1                          # and only once
+
+
+def test_sliding_session_and_watchlist_ignores_hidden(tmp_path, monkeypatch):
+    from datetime import timedelta
+    from sniper.models import utcnow
+    c = _client(tmp_path, monkeypatch); _signup(c)
+    db = c.app.state.db
+    soon = (utcnow() + timedelta(days=2)).isoformat()
+    db.conn.execute("UPDATE sessions SET expires_at=?", (soon,)); db.conn.commit()
+    assert c.get("/api/me").status_code == 200
+    assert db.conn.execute("SELECT expires_at FROM sessions").fetchone()[0] > (utcnow() + timedelta(days=29)).isoformat()
+
+    w = c.post("/api/watches", json={"query": "RTX 4060"}).json()
+    items = c.get(f"/api/watches/{w['id']}/listings").json()["items"]
+    cheapest = min(items, key=lambda i: i["total_cost"])
+    c.post("/api/hidden", json={"kind": "listing", "value": cheapest["key"]})
+    (row,) = c.get("/api/watches").json()
+    assert row["lowest"] >= cheapest["total_cost"] and row["count"] == len(items) - 1      # hidden one not counted
