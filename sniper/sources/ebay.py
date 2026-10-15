@@ -23,7 +23,7 @@ CONDITION_IDS = {
     "new": ["1000"],
     "open_box": ["1500", "1750", "2750"],
     "refurbished": ["2000", "2010", "2020", "2030", "2500"],
-    "used": ["3000", "4000", "5000", "6000"],
+    "used": ["2990", "3000", "3010", "4000", "5000", "6000"],    # 2990/3010: "Pre-owned" grades added in 2025
     "parts": ["7000"],
 }
 _ID_TO_CONDITION = {cid: cond for cond, ids in CONDITION_IDS.items() for cid in ids}
