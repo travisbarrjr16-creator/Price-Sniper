@@ -795,3 +795,55 @@ def test_backplate_feature_vs_backplate_for_sale():
     assert ok("EVGA GeForce RTX 3080 FTW3 Ultra Gaming, 10GB GDDR6X, ARGB LED, Metal Backplate, LHR")
     assert not ok("EVGA RTX 3080 FTW3 backplate")
     assert not ok("Backplate for RTX 3080 10GB FTW3")
+
+
+def test_model_variants_realistic_titles():
+    from sniper.matching import match
+    cases = [("RTX 4070", "MSI GeForce RTX 4070 Ventus 2X 12G OC", True),
+             ("RTX 4070", "ASUS RTX 4070 SUPER Dual 12GB", False),
+             ("RTX 4070", "Gigabyte RTX 4070 Ti Gaming OC 12G", False),
+             ("RTX 4070 Super", "ASUS RTX 4070 Ti SUPER TUF 16GB", False),
+             ("RTX 4060 Ti", "PNY RTX 4060 Ti 16GB Verto", True),
+             ("RX 7900 XT", "XFX Speedster MERC310 RX 7900 XTX 24GB", False),
+             ("Ryzen 5 7600", "AMD Ryzen 5 7600X 6-core", False),
+             ("Ryzen 5 7600X", "AMD Ryzen 5 7600X 6-core", True),          # "7600X 6" isn't a "7600x6" kit
+             ("i5-13600K", "Intel Core i5-13600KF", False),
+             ("RTX 3080 12GB", "EVGA RTX 3080 10GB FTW3", False),
+             ("DDR5 2x16 6000", "Kingston FURY Beast 32GB (2 x 16GB) DDR5-6000 CL36", True),
+             ("DDR5 2x16 6000", "Kingston FURY Beast 64GB (2 x 32GB) DDR5-6000", False),
+             ("iPhone 15 Pro", "Apple iPhone 15 Pro Max 256GB", False),
+             ("iPhone 15 Pro", "Apple iPhone 15 Pro 256GB Natural Titanium", True),
+             ("PS5", "Sony PlayStation 5 PS5 Slim Disc Console", True)]
+    for q, t, expected in cases:
+        got = match(Listing(source="T", source_id="1", title=t, url="https://x", price=100, condition="new"),
+                    Watch(query=q))[0]
+        assert got == expected, (q, t)
+
+
+def test_real_store_titles_match_their_part():
+    from sniper.matching import match
+    good = [("RTX 4070 Super", "ASUS Dual GeForce RTX 4070 SUPER OC Edition 12GB GDDR6X Graphics Card"),
+            ("RTX 4060", "MSI Gaming GeForce RTX 4060 8GB GDRR6 Extreme Clock: 2505 MHz 128-Bit HDMI/DP Nvlink TORX Fan 4.0 "
+                         "Ada Lovelace Architecture Graphics Card (RTX 4060 Ventus 2X Black 8G OC)"),
+            ("RX 7800 XT", "Sapphire Pulse AMD Radeon RX 7800 XT Gaming Graphics Card with 16GB GDDR6, AMD RDNA 3"),
+            ("Ryzen 5 7600", "AMD Ryzen 5 7600 6-Core, 12-Thread Unlocked Desktop Processor with Radeon Graphics"),
+            ("i5-13600K", "Intel Core i5-13600K Desktop Processor 14 cores (6 P-cores + 8 E-cores) with Integrated Graphics"),
+            ("DDR5 2x16 6000", "CORSAIR VENGEANCE RGB DDR5 RAM 32GB (2x16GB) 6000MHz CL36 Intel XMP iCUE Compatible "
+                               "Computer Memory - Black"),
+            ("DDR4 16GB 3200", "Crucial RAM 16GB DDR4 3200MHz CL22 (or 2933MHz or 2666MHz) Laptop Memory CT16G4SFRA32A"),
+            ("SN850X 2TB", "WD_BLACK 2TB SN850X NVMe Internal Gaming SSD Solid State Drive - Gen4 PCIe, M.2 2280"),
+            ("Samsung 870 EVO 1TB", "SAMSUNG 870 EVO SATA SSD 1TB 2.5 Inch Internal Solid State Drive, Upgrade PC or "
+                                    "Laptop Memory and Storage for IT Pros"),
+            ("RM850x", "Corsair RM850x Fully Modular Low-Noise ATX Power Supply - ATX 3.1 Compliant - Cybenetics Gold"),
+            ("B650 Tomahawk", "MSI MAG B650 Tomahawk WiFi Gaming Motherboard (AMD AM5, ATX, DDR5, AMD Ryzen 7000 Series Processors)"),
+            ("Arc B580", "Intel Arc B580 Limited Edition Graphics Card 12GB")]
+    bad = [("RTX 4060", "Acer Nitro V Gaming Laptop | Intel Core i5-13420H | NVIDIA GeForce RTX 4060 Laptop GPU"),
+           ("RTX 4060", "Skytech Gaming Nebula Gaming PC Desktop – Intel Core i5 13400F, NVIDIA RTX 4060, 1TB NVMe SSD"),
+           ("Ryzen 7 7800X3D", "AMD Ryzen 7 7800X3D CPU + ASUS TUF B650 Motherboard Combo"),
+           ("DDR5 2x16 6000", "Micro Center AMD Ryzen 7 7700X Bundle with B650 and 32GB DDR5 6000")]
+    def ok(q, t):
+        return match(Listing(source="T", source_id="1", title=t, url="https://x", price=100, condition="new"), Watch(query=q))
+    for q, t in good:
+        assert ok(q, t)[0], (q, t, ok(q, t)[1])
+    for q, t in bad:
+        assert not ok(q, t)[0], (q, t)

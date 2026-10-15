@@ -13,7 +13,10 @@ from .models import Listing, Watch
 VARIANT_SUFFIXES = {
     "ti", "super", "xt", "xtx", "gre", "pro", "max", "plus", "ultra", "mini",
     "lite", "fe",
+    "x", "k", "kf", "f", "ks", "g",       # CPU models: 7600 vs 7600X, 13600K vs 13600KF
 }
+# ...but only when written stuck to the number ("7600X"), not "RTX 4060 x2 fans"
+GLUED_SUFFIXES = {"x", "k", "kf", "f", "ks", "g"}
 # "fe" (Founders Edition) is the same GPU, so it is not treated as a variant.
 NON_VARIANT = {"fe"}
 
@@ -84,7 +87,8 @@ def whole_system_reason(title: str, query: str) -> str | None:
 
 _UNIT_RE = re.compile(r"(\d+)\s+(gb|tb|mb|mhz|ghz|hz|in|inch|mm|w)\b")
 # "2x16GB" / "2 x 16 GB" -> "2x16" (kits, multipacks)
-_KIT_RE = re.compile(r"\b(\d+) ?x ?(\d+)(?:gb|tb|mb)?\b")
+# (a kit count is 1-2 digits, so "7600X 6-core" stays the 7600X CPU)
+_KIT_RE = re.compile(r"\b(\d{1,2}) ?x ?(\d+)(?:gb|tb|mb)?\b")
 # units don't matter when comparing words: "16" == "16gb", "6400" == "6400mhz"
 _CORE_RE = re.compile(r"^(\d+(?:\.\d+)?|\d+x\d+)(gb|tb|mb|mhz|ghz|hz|mt|w|mm|in|inch)$")
 
@@ -171,8 +175,11 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
             return False, why
         query_set = set(query_tokens)
         for i, tok in enumerate(title_tokens):
-            if tok.isdigit() and tok in query_set and i + 1 < len(title_tokens):
+            # "4070 Super" when you searched "4070"; also "15 Pro Max" when you searched "15 Pro"
+            if (tok.isdigit() or tok in VARIANT_SUFFIXES) and tok in query_set and i + 1 < len(title_tokens):
                 nxt = title_tokens[i + 1]
+                if nxt in GLUED_SUFFIXES and not re.search(rf"(?<![a-z0-9]){tok}{nxt}", listing.title.lower()):
+                    continue
                 if nxt in VARIANT_SUFFIXES and nxt not in NON_VARIANT and nxt not in query_set:
                     return False, f"variant '{tok} {nxt}'"
 
