@@ -10,3 +10,5 @@ logs/
 keys/
 backups/
 *.watcher.lock
+*.db-wal
+*.db-shm

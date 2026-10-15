@@ -99,8 +99,13 @@ CREATE INDEX IF NOT EXISTS idx_snapshots ON snapshots(watch_id, ts);
 class DB:
     def __init__(self, path: Optional[str] = None) -> None:
         self.path = path or os.getenv("SNIPER_DB", "sniper.db")
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
+        self.conn = sqlite3.connect(self.path, check_same_thread=False, timeout=15)
         self.conn.row_factory = sqlite3.Row
+        # WAL: admin commands (maintenance notices, reset links) can read/write while the server
+        # runs without "database is locked", and a power cut can't corrupt the file mid-write.
+        if self.path != ":memory:":
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA synchronous=NORMAL")
         self.lock = threading.Lock()
         with self.lock:
             self.conn.executescript(SCHEMA)
