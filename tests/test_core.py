@@ -650,6 +650,17 @@ def test_security_headers_and_cross_site_block(tmp_path, monkeypatch):
     ok = c.post("/api/auth/signup", json={"email": "x@example.com", "password": "supersecret1"},
                 headers={"Origin": "http://testserver"})
     assert ok.status_code == 200
+    # behind a proxy (e.g. Tailscale) Host may be rewritten; PUBLIC_URL or X-Forwarded-Host still match
+    monkeypatch.setenv("PUBLIC_URL", "https://my-pc.tail1234.ts.net")
+    via_proxy = c.post("/api/auth/login", json={"email": "x@example.com", "password": "supersecret1"},
+                       headers={"Origin": "https://my-pc.tail1234.ts.net"})
+    assert via_proxy.status_code == 200
+    fwd = c.post("/api/auth/login", json={"email": "x@example.com", "password": "supersecret1"},
+                 headers={"Origin": "https://other.ts.net", "X-Forwarded-Host": "other.ts.net"})
+    assert fwd.status_code == 200
+    bad = c.post("/api/auth/login", json={"email": "x@example.com", "password": "supersecret1"},
+                 headers={"Origin": "https://evil.example"})
+    assert bad.status_code == 403 and "PUBLIC_URL" in bad.json()["detail"]
 
 
 def test_non_web_links_are_dropped(tmp_path):

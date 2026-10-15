@@ -17,7 +17,7 @@ from typing import Annotated, Optional
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi import Path as PathParam
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
@@ -31,6 +31,7 @@ from .watcher import HISTORY_DAYS, Watcher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 STATIC = Path(__file__).parent / "static"
+log = logging.getLogger("sniper.app")
 COOKIE = "sniper_session"
 
 
@@ -149,10 +150,15 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         # (defense in depth on top of SameSite cookies and the JSON-only API).
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
             origin = request.headers.get("origin")
-            if origin and origin.split("://", 1)[-1] != request.headers.get("host", ""):
-                allowed = public_url().split("://", 1)[-1]
-                if origin.split("://", 1)[-1] != allowed:
-                    return Response("cross-site request blocked", status_code=403)
+            if origin and origin != "null":
+                origin_host = origin.split("://", 1)[-1].rstrip("/").lower()
+                ours = {request.headers.get("host", ""), request.headers.get("x-forwarded-host", ""),
+                        public_url().split("://", 1)[-1]}       # proxies like Tailscale may rewrite Host
+                if origin_host not in {h.lower() for h in ours if h}:
+                    log.warning("blocked request from %s (PUBLIC_URL is %s)", origin, public_url())
+                    return JSONResponse({"detail": f"Blocked: this page's address ({origin}) doesn't match the "
+                                                   f"app's PUBLIC_URL ({public_url()}). If this is your app, set "
+                                                   f"PUBLIC_URL={origin} in .env and restart."}, status_code=403)
         response = await call_next(request)
         h = response.headers
         h.setdefault("X-Content-Type-Options", "nosniff")
