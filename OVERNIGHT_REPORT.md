@@ -3,7 +3,7 @@
 Everything below is on the **`overnight-improvements`** branch. Your `main` version is untouched.
 If you like it, tell Claude "merge the overnight branch" (or merge it on GitHub). If not, nothing changes.
 
-**At a glance:** 66 commits · 51 files changed · tests went from 54 → **192** (all passing, on Python 3.11 and 3.13) · zero accessibility violations · zero errors in a 66-minute unattended run (34 alerts, 2 daily backups, every check on time).
+**At a glance:** 65+ commits · 51 files changed · tests went from 54 → **192** (all passing, on Python 3.11 and 3.13) · zero accessibility violations · zero errors in a 66-minute unattended run (34 alerts, 2 daily backups, every check on time).
 
 ---
 
