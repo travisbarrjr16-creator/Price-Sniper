@@ -219,6 +219,9 @@ def test_maintenance_notice(tmp_path, monkeypatch):
     maintenance.cancel(db)
     assert c.get("/api/notice").json()["maintenance"] is None
 
+    maintenance.announce(db, -(maintenance.STALE_AFTER + 10))   # deadline long gone, but the server never restarted
+    assert c.get("/api/notice").json()["maintenance"] is None and db.get_setting("maintenance") is None
+
     # admin HTTP endpoint: off without a token, needs the right token when on
     assert c.post("/api/admin/maintenance", json={"seconds": 60}).status_code == 403
     monkeypatch.setenv("SNIPER_ADMIN_TOKEN", "s3cret-token")

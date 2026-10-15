@@ -19,6 +19,7 @@ from .db import DB
 from .models import utcnow
 
 KEY = "maintenance"
+STALE_AFTER = 300   # still running 5 min after the deadline = the update didn't happen; drop the banner
 DEFAULT_MESSAGE = "Price Sniper is updating. It'll be back in a minute or two, and your watches are saved."
 
 
@@ -38,6 +39,9 @@ def current(db: DB) -> Optional[dict]:
         return None
     notice = json.loads(raw)
     left = (datetime.fromisoformat(notice["at"]) - utcnow()).total_seconds()
+    if left < -STALE_AFTER:
+        cancel(db)          # otherwise everyone sees "Updating now…" forever
+        return None
     return {**notice, "seconds_left": max(0, int(left))}
 
 
