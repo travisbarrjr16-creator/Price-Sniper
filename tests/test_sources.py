@@ -203,3 +203,13 @@ def test_foreign_currency_listings_skipped():
         {"id": 1, "title": "Pedal", "price": {"amount": "100.00", "currency": "EUR"}},
         {"id": 2, "title": "Pedal", "price": {"amount": "120.00", "currency": "USD"}}]}
     assert [l.source_id for l in parse_listings(reverb)] == ["2"]
+
+
+def test_hws_sold_markers_vs_ordinary_wording():
+    from sniper.sources.reddit import live_lines
+    gone = ["RTX 3080 FE - $450 SOLD", "3080 - sold to u/bob", "6800 XT $400 (pending)", "Ryzen 5600 - GONE",
+            "[SOLD] 16GB DDR4 $40"]
+    still_for_sale = ["3080 FE - $450 shipped, not sold separately", "Monitor $300, sold as-is",
+                      "Can be sold together for $700", "Price has gone down to $200"]
+    assert all(live_lines(l) == [] for l in gone)
+    assert all(live_lines(l) for l in still_for_sale)
