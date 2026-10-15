@@ -29,7 +29,7 @@ JUNK_PHRASES = [
     "parts only", "cracked", "no display", "artifacting",
 ]
 
-_PLUS_EXTRAS = {"free", "a", "bonus", "extra", "box", "cooler", "shipping", "games", "game", "case", "controller"}
+_PLUS_EXTRAS = {"free", "bonus", "extra", "box", "cooler", "shipping", "games", "game", "case", "controller"}
 
 # Card features, not accessories, when the title also describes the card itself ("Metal Backplate, 10GB GDDR6X")
 _FEATURE_WORDS = {"backplate", "shroud"}
@@ -62,7 +62,7 @@ _DESCRIPTIVE_RE = re.compile(
     rf"|\b(?:for|in|fits|upgrade|compatible with|works with) (?:your |a |most |any )?{_PC}(?: (?:and |or )?{_PC})*\b"
     rf"|\b(?:pulled|removed|taken|came) (?:out )?(?:of|from) (?:an? |my |the |his )?(?:[a-z0-9]+ ){{0,2}}?(?:{_PC}|pre ?built)\b"
     rf"|\bused in (?:my |a |the )?(?:{_PC} ){{0,2}}(?:{_PC}|pre ?built|build)\b"   # "pulled from a Dell desktop"
-    r"|\b(?:pcs?|desktops?) (?:and |or )?laptops?\b|\blaptops? (?:and |or )?(?:pcs?|desktops?)\b"  # "PC & laptop"
+    r"|\b(?:pcs?|desktops?) (?:and|or) laptops?\b|\blaptops? (?:and|or) (?:pcs?|desktops?)\b"  # "PC & laptop", not "Laptop PC"
     rf"|\b{_PC} (?:power )?(?:cables?|cords?|adapters?)\b"
     r"|\b(?:amd )?radeon(?: vega| rx vega)?(?: \d{1,4}(?: ?m)?)? graphics\b|\b(?:intel )?(?:uhd|iris xe|integrated) graphics\b"
     r"|\b(?:for|with|compatible with|optimized for|supports?) (?:amd |intel )*(?:ryzen|core|amd|intel|expo|xmp)\b"
@@ -81,6 +81,7 @@ def whole_system_reason(title: str, query: str) -> str | None:
     kind = part_kind(query)
     if not kind:
         return None                     # only for PC-part searches: "computer" is fine in a Raspberry Pi search
+    title = re.sub(r"\s*[&/]\s*", " and ", title)          # "PC & laptop" / "PC/laptop" -> "pc and laptop"
     t, q = _DESCRIPTIVE_RE.sub(" ", normalize(title)), normalize(query)
     m = _CONTAINER_RE.search(t)
     if m and not _CONTAINER_RE.search(q):
@@ -187,10 +188,13 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
                 nxt = title_tokens[i + 1]
                 if nxt in GLUED_SUFFIXES and not re.search(rf"(?<![a-z0-9]){tok}{nxt}", listing.title.lower()):
                     continue
-                if not tok.isdigit() and not re.search(rf"(?<![a-z0-9]){tok} +{nxt}(?![a-z0-9])", listing.title.lower()):
+                low = listing.title.lower()
+                if (not tok.isdigit() and re.search(rf"(?<![a-z0-9]){tok}\s*[,;.|]\s*{nxt}(?![a-z0-9])", low)
+                        and not re.search(rf"(?<![a-z0-9]){tok}[\s-]+{nxt}(?![a-z0-9])", low)):
                     continue        # "iPhone 15 Pro, Max battery health": a comma between, not "Pro Max"
-                if nxt == "plus" and i + 2 < len(title_tokens) and title_tokens[i + 2] in _PLUS_EXTRAS:
-                    continue        # "7600X Plus free cooler"
+                if (nxt == "plus" and i + 2 < len(title_tokens) and title_tokens[i + 2] in _PLUS_EXTRAS
+                        and (tok in GLUED_SUFFIXES or " + " in low)):
+                    continue        # "7600X Plus free cooler", "RTX 4060 + free game" (but "iPhone 15 Plus case" is a Plus)
                 if nxt in VARIANT_SUFFIXES and nxt not in NON_VARIANT and nxt not in query_set:
                     return False, f"variant '{tok} {nxt}'"
 

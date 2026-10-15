@@ -876,3 +876,21 @@ def test_hws_sold_variants_second_pass():
     for l in ["RTX 3080 FE - $450 - SOLD for $430", "3080 - sold locally", "3080 - traded for a 6800",
               "3080 - Sold in person", "3080 - pending with u/x"]:
         assert live_lines(l) == [], l
+
+
+def test_third_review_matching_cases():
+    from sniper.matching import match
+    from sniper.sources.reddit import live_lines
+    cases = [("rtx 4060", "MSI Thin GF63 Gaming Laptop PC RTX 4060 8GB 16GB RAM 512GB SSD", False),
+             ("ddr5 32gb", "Lenovo Legion Laptop PC 32GB DDR5 1TB", False),
+             ("iphone 15", "Apple iPhone 15 Plus Free Shipping", False),
+             ("galaxy s24", "Samsung Galaxy S24 Plus A Grade 256GB", False),
+             ("iphone 15 pro", "iPhone 15 Pro-Max 256GB", False),
+             ("990 pro 2tb", "Samsung 990 PRO 2TB NVMe for PC/laptop", True),
+             ("rtx 4060", "RTX 4060 8GB + free game", True)]
+    for q, t, expected in cases:
+        got = match(Listing(source="T", source_id="1", title=t, url="https://x", price=100, condition="new"),
+                    Watch(query=q))[0]
+        assert got == expected, (q, t)
+    assert live_lines("RTX 3070 $280, need it gone") and live_lines("want these gone ASAP $50")
+    assert live_lines("3070 - GONE") == []

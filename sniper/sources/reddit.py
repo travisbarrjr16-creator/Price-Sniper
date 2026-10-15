@@ -29,7 +29,8 @@ _STRIKE = re.compile(r"~~.*?~~", re.S)
 # are ordinary wording: "sold as-is", "not sold separately", "can be sold together", "price has gone down".
 _SOLD = re.compile(r"\bpending\b"
                    r"|(?<!not )(?<!be )(?<!been )\b(sold|traded)\b(?! (as[- ]?is|separately|together|individually|as a)\b)"
-                   r"|(?<!has )(?<!have )(?<!had )\bgone\b(?! (down|up)\b)", re.I)
+                   r"|(?<!has )(?<!have )(?<!had )(?<!it )(?<!them )(?<!these )(?<!this )(?<!everything )\bgone\b"
+                   r"(?! (down|up|asap|soon|quick|quickly|fast|this|by|today)\b)", re.I)
 _HWS_TITLE = re.compile(r"^\s*\[(?P<loc>[A-Z]{2,3}(?:-[A-Z]{2})?)\]\s*\[H\](?P<have>.*?)\[W\](?P<want>.*)$", re.I)
 _TRADES = re.compile(r"trades?\s*:\s*(\d+)", re.I)
 _MONEY_WORDS = ("paypal", "cash", "venmo", "zelle", "money", "$")
