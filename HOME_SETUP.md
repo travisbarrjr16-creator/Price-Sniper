@@ -70,6 +70,7 @@ For each friend:
 2. You let them in. Pick one:
    - **Share just this computer (recommended):** [admin console → Machines](https://login.tailscale.com/admin/machines) → the **⋯** menu next to this computer → **Share** → send them the invite link. They can reach only the app's computer, nothing else of yours.
    - **Or invite them to your network:** admin console → **Users** → **Invite users**. Counts toward the 6-person limit.
+   - Sharing is a Tailscale **beta** feature. If a shared friend can't open the `https://…ts.net` address, invite them to your network instead. Invite links expire after 30 days.
 3. They open the `https://...ts.net` address, create an account with the invite code, and set their own ntfy topic in **Settings** for phone alerts.
 
 Tip: on a phone, use **Share → Add to Home Screen** so the app gets an icon like a normal app.
