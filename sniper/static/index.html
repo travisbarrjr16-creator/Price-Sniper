@@ -18,8 +18,8 @@
 :root {
   color-scheme: light;
   --bg: #f6f6f4; --surface: #fcfcfb; --surface-2: #efeeea; --border: #dddcd6;
-  --text: #0b0b0b; --text-2: #52514e; --muted: #85837d;
-  --accent: #2a78d6; --accent-ink: #fff;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #6e6c66;
+  --accent: #246ec6; --accent-ink: #fff; --link: #246ec6;
   --series-new: #2a78d6; --series-used: #eb6834;
   --good: #0a7a3d; --good-bg: #e3f4ea; --warn: #8a5a00; --warn-bg: #fbf0d6;
   --bad: #b42323; --bad-bg: #fbe4e4; --neutral-bg: #ecebe7;
@@ -30,7 +30,7 @@
     color-scheme: dark;
     --bg: #121211; --surface: #1a1a19; --surface-2: #242422; --border: #34332f;
     --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8d85;
-    --accent: #3987e5; --series-new: #3987e5; --series-used: #d95926;
+    --accent: #2a72c9; --link: #6ea8ef; --series-new: #3987e5; --series-used: #d95926;
     --good: #6fd39a; --good-bg: #173524; --warn: #f0c060; --warn-bg: #3a2d10;
     --bad: #f08a8a; --bad-bg: #3d1a1a; --neutral-bg: #2a2a27;
     --orange: #f7a26a; --orange-bg: #3d2112; --orange-line: #d95926;
@@ -40,7 +40,7 @@
   color-scheme: dark;
   --bg: #121211; --surface: #1a1a19; --surface-2: #242422; --border: #34332f;
   --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8d85;
-  --accent: #3987e5; --series-new: #3987e5; --series-used: #d95926;
+  --accent: #2a72c9; --link: #6ea8ef; --series-new: #3987e5; --series-used: #d95926;
   --good: #6fd39a; --good-bg: #173524; --warn: #f0c060; --warn-bg: #3a2d10;
   --bad: #f08a8a; --bad-bg: #3d1a1a; --neutral-bg: #2a2a27;
   --orange: #f7a26a; --orange-bg: #3d2112; --orange-line: #d95926;
@@ -60,6 +60,7 @@ input, select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); 
 .checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
 .checks label { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--text); font-size: 13px; }
 .checks input { width: auto; }
+.checks input[type=checkbox] { width: 20px; height: 20px; margin: 2px 0; accent-color: var(--accent); }   /* WCAG 2.2 target size */
 button { font: inherit; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); padding: 7px 12px; border-radius: 7px; cursor: pointer; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 button:disabled { opacity: .6; cursor: progress; }
@@ -165,12 +166,12 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .alert-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .alert-row .r { font-size: 13px; } .alert-row .tt { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
 .alert-row .when { font-size: 11px; color: var(--muted); }
-.alert-row.unread .r::before { content: "● "; color: var(--accent); }
+.alert-row.unread .r::before { content: "● "; color: var(--link); }
 .mutelist { list-style: none; padding: 0; margin: 4px 0 0; max-height: 160px; overflow: auto; }
 .mutelist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .mutelist button { font-size: 12px; padding: 3px 8px; min-height: 26px; }
 .auth-card .theme-btn { float: right; margin-top: -2px; }
-.linkbtn { background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; font: inherit; }
+.linkbtn { background: none; border: 0; color: var(--link); padding: 0; cursor: pointer; font: inherit; }
 .user { display: flex; gap: 8px; align-items: center; }
 .user .email { color: var(--text-2); font-size: 13px; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); padding: 18px; width: min(440px, calc(100vw - 32px)); }
@@ -183,7 +184,7 @@ select.site { width: auto; min-width: 150px; }
 [hidden] { display: none !important; }
 #toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 10; max-width: calc(100vw - 32px); }
 .toast { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--good); border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.15); width: 320px; max-width: 100%; }
-.toast a { color: var(--accent); }
+.toast a { color: var(--link); }
 table.hist { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 table.hist td, table.hist th { padding: 3px 6px; border-bottom: 1px solid var(--border); text-align: right; }
 table.hist th:first-child, table.hist td:first-child { text-align: left; }
@@ -191,7 +192,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
 </head>
 <body>
 <div id="notice" role="status" aria-live="polite" hidden></div>
-<div class="auth-wrap" id="auth" hidden>
+<main class="auth-wrap" id="auth" hidden>
   <div class="card auth-card">
     <button class="theme-btn" type="button" data-theme-toggle></button>
     <h1>🎯 Price Sniper</h1>
@@ -218,7 +219,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
       <div style="margin-top:12px"><button class="primary" type="submit">Set new password</button></div>
     </form>
   </div>
-</div>
+</main>
 
 <div id="app" hidden>
 <header>
@@ -318,7 +319,7 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
     <div class="card empty">Create a watch to start sniping. Results from every source land here, sorted by what you'd actually pay.</div>
   </main>
 </div>
-<div id="toasts"></div>
+<div id="toasts" role="region" aria-label="Notifications" aria-live="polite"></div>
 </div>
 
 <script>
@@ -891,6 +892,20 @@ async function boot() {
   const g = new URLSearchParams(location.search).get("gmail");
   if (g) { history.replaceState(null, "", "/"); if (g === "connected") $("#settingsBtn").click(); }
 }
+// Connect each <label> to the field right after it, so screen readers announce the right name
+function linkLabels(root = document) {
+  let n = 0;
+  root.querySelectorAll("label:not([for])").forEach(lab => {
+    if (lab.querySelector("input, select, textarea")) return;          // already wraps its field
+    let el = lab.nextElementSibling;
+    if (el && !el.matches("input, select, textarea")) el = el.querySelector?.("input, select, textarea");
+    if (!el) return;
+    if (!el.id) el.id = "f-" + (el.name || "field") + "-" + (++n);
+    lab.htmlFor = el.id;
+  });
+}
+linkLabels();
+
 // --- theme: Auto (follow the device) -> Light -> Dark ---------------------
 const THEMES = {auto: ["🖥", "Auto"], light: ["☀️", "Light"], dark: ["🌙", "Dark"]};
 function currentTheme() { return document.documentElement.dataset.theme || "auto"; }
