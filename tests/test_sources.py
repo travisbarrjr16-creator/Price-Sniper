@@ -79,3 +79,29 @@ def test_reddit_hardwareswap():
     assert (l.price, l.shipping, l.seller_feedback_count, l.location) == (230.0, 0.0, 12, "USA-TX")
     assert parse_hws({**post, "title": "[USA-TX] [H] PayPal [W] RTX 4060"}, "RTX 4060") is None     # buying post
     assert parse_hws({**post, "title": "[USA-TX] [H] RTX 4060 [W] RTX 3080"}, "RTX 4060") is None   # trade only
+
+
+def test_walmart_keys_command(tmp_path, monkeypatch):
+    import pytest
+    from sniper import admin
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("WALMART_CONSUMER_ID=\nWALMART_PRIVATE_KEY_PATH=\n")
+    public = admin.walmart_keys()
+    assert public.startswith("-----BEGIN PUBLIC KEY-----")
+    assert "WALMART_PRIVATE_KEY_PATH=keys/walmart_private.pem" in (tmp_path / ".env").read_text()
+    assert oct((tmp_path / "keys/walmart_private.pem").stat().st_mode)[-3:] == "600"
+    # the generated private key signs requests that verify with the public key we'd upload
+    pem = (tmp_path / "keys/walmart_private.pem").read_bytes()
+    h = sign_headers("cid", "1", pem, ts_ms=1)
+    pub = serialization.load_pem_public_key(public.encode())
+    pub.verify(base64.b64decode(h["WM_SEC.AUTH_SIGNATURE"]), b"cid\n1\n1\n", padding.PKCS1v15(), hashes.SHA256())
+    with pytest.raises(SystemExit):
+        admin.walmart_keys()              # never silently replaces a key already uploaded to Walmart
+
+
+def test_set_env_values_adds_and_replaces(tmp_path):
+    from sniper.admin import set_env_values
+    env = tmp_path / ".env"
+    env.write_text("A=1\nB=2")
+    set_env_values({"B": "3", "C": "4"}, env)
+    assert env.read_text() == "A=1\nB=3\nC=4\n"

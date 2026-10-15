@@ -65,11 +65,13 @@ user's searches use them.
 
 ## Sources
 
+**Step-by-step key setup: [SITE_KEYS.md](SITE_KEYS.md).** Check them with `python -m sniper.admin test-sources`.
+
 | Source | Covers | Free setup |
 |---|---|---|
 | **eBay** (Browse API) | New, open box, refurb, used, **local pickup within your radius** | [developer.ebay.com](https://developer.ebay.com) → `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` |
 | **Best Buy** (Products API) | New + refurb retail | [developer.bestbuy.com](https://developer.bestbuy.com) → `BESTBUY_API_KEY` |
-| **Walmart** (Affiliate API) | Walmart.com + marketplace sellers; "Restored" = refurb | [walmart.io](https://walmart.io): make an account, generate an RSA key pair, upload the public key → `WALMART_CONSUMER_ID`, `WALMART_PRIVATE_KEY_PATH`. *Unconfirmed whether new sign-ups are still approved.* |
+| **Walmart** (Affiliate API) | Walmart.com + marketplace sellers; "Restored" = refurb | [walmart.io](https://walmart.io) account; `python -m sniper.admin walmart-keys` makes the key pair to upload → `WALMART_CONSUMER_ID`. Steps in [SITE_KEYS.md](SITE_KEYS.md). *Unconfirmed whether new sign-ups are still approved.* |
 | **Reddit** (official API) | **r/buildapcsales** retailer deals (price from the title) and **r/hardwareswap** used parts. For r/hardwareswap, only selling posts are used, the price comes from the post body, and the seller's "Trades: N" counts as feedback | [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps), create a *script* app → `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` |
 | **Reverb** | Music gear, some electronics; new/used | Personal token in reverb.com settings → `REVERB_TOKEN` |
 | **Etsy** (Open API v3) | Handmade/vintage; shipping is estimated | [etsy.com/developers](https://www.etsy.com/developers) → `ETSY_API_KEY` (+ `ETSY_SHARED_SECRET`) |

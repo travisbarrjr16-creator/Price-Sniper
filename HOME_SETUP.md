@@ -75,12 +75,12 @@ For each friend:
 Tip: on a phone, use **Share → Add to Home Screen** so the app gets an icon like a normal app.
 
 ## 8. Add marketplace keys (when you're ready)
-Open `.env` in any text editor, fill in the keys you have (eBay, Best Buy, Walmart, Reddit, …; the README explains where to get each), then restart:
+Follow **[SITE_KEYS.md](SITE_KEYS.md)**: a checklist of the free developer accounts (start with eBay), with step-by-step Walmart instructions. Put the keys in `.env`, then restart:
 - **Mac:** `launchctl kickstart -k gui/$(id -u)/com.pricesniper.app`
 - **Linux:** `systemctl --user restart price-sniper`
 - **Windows:** `Stop-ScheduledTask "Price Sniper"; Start-ScheduledTask "Price Sniper"`
 
-Until you add keys, the app uses the **Demo** data so you can try everything.
+Until you add keys, the app uses the **Demo** data so you can try everything. To check your keys work: `.venv/bin/python -m sniper.admin test-sources` (Windows: `.venv\Scripts\python -m sniper.admin test-sources`).
 
 ## 9. Updating
 Get the new code onto GitHub (for example, from a Claude Code session), then on the home computer:
@@ -90,7 +90,7 @@ Get the new code onto GitHub (for example, from a Claude Code session), then on 
 Everyone using the app gets the orange 60-second countdown, then it updates and their page reloads. If anything fails, the banner is cancelled and the old version keeps running.
 
 ## 10. Good to know
-- **Backups:** every so often, copy `sniper.db` (everyone's watches and accounts) and `.env` (your keys) somewhere safe. Without `.env`, saved Gmail connections can't be read.
+- **Backups:** every so often, copy `sniper.db` (everyone's watches and accounts), `.env` (your keys), and the `keys/` folder (Walmart key) somewhere safe. Without `.env`, saved Gmail connections can't be read.
 - **Windows restarts:** the app starts when you **sign in** to Windows. If the PC reboots (for example, Windows Update), sign in again, or set Windows to sign in automatically.
 - **Logs if something's wrong:**
   - **Mac:** `logs/sniper.log`
