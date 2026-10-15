@@ -59,14 +59,13 @@ class ReverbSource(Source):
         self.token = os.getenv("REVERB_TOKEN", "")
 
     def configured(self) -> bool:
-        return bool(self.token)
+        # Listing search reportedly works without a token; REVERB_ENABLED=1 turns it on keyless.
+        return bool(self.token) or os.getenv("REVERB_ENABLED") == "1"
 
     async def search(self, watch: Watch, client: httpx.AsyncClient) -> list[Listing]:
-        headers = {
-            "Accept": "application/hal+json",
-            "Accept-Version": "3.0",
-            "Authorization": f"Bearer {self.token}",
-        }
+        headers = {"Accept": "application/hal+json", "Accept-Version": "3.0"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         params = {"query": watch.query, "per_page": "50"}
         if watch.max_price:
             params["price_max"] = f"{watch.max_price:.0f}"
