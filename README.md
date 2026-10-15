@@ -132,6 +132,15 @@ uvicorn sniper.app:app --host 0.0.0.0 --port 8000
 Data is kept in SQLite (`sniper.db`). Back it up together with
 `.sniper_secret`; without the secret, stored Gmail connections can't be decrypted.
 
+The app writes a backup to `backups/` every day (database + `.env` + `.sniper_secret` + `keys/`, newest 14 kept),
+or run `python -m sniper.admin backup` any time. Use these instead of copying `sniper.db` by hand: while the app
+runs, recent changes can still be in `sniper.db-wal`, so a plain copy can miss them.
+
+**Restoring a backup:** stop the app, unpack the newest `backups/price-sniper-backup-….tar.gz` into the
+Price-Sniper folder (it holds `sniper.db`, `.env`, `.sniper_secret`, `keys/`), delete any old `sniper.db-wal` and
+`sniper.db-shm` files, then start the app again. To unpack: `tar -xzf <file>.tar.gz` (works in PowerShell on
+Windows 10/11 too).
+
 ## Updating with a heads-up for users
 
 ```bash

@@ -34,7 +34,14 @@ If you like it, tell Claude "merge the overnight branch" (or merge it on GitHub)
 | 21 | **Signed out after 30 days even if you use it daily** | Stays signed in as long as you open it at least once a month |
 | 22 | **"Updating now…" banner could get stuck forever** if an update was announced but never happened | Clears itself 5 minutes after the deadline |
 | 23 | **Quiet hours used the wrong time zone on Windows** (Windows doesn't include the time-zone data Python needs) | Added the `tzdata` package, plus a daylight-saving test |
-| 24 | Walmart could alert on out-of-stock items; login tracker could grow without limit; muted/hidden listings still counted in the watch list; a few others | Fixed |
+| 24 | **My own new PC-part filter hid real parts** ("Desktop Processor", "Desktop Memory", "SSD for Laptop & Desktop", "with Radeon Graphics"). Found by a second review pass | Those phrases now count as describing the part; laptops/prebuilts/bundles are still skipped. Tested on 27 real store titles |
+| 25 | **"Ryzen 5 7600X" couldn't find the 7600X** (read as a RAM kit "7600×6"); "Ryzen 5 7600" matched the 7600X; "iPhone 15 Pro" matched Pro Max | Fixed, with tests |
+| 26 | **Editing a watch while it was being checked could undo the edit** (and deleting one mid-check left junk behind) | The check picks up your latest settings and saves only its own results |
+| 27 | **r/hardwareswap skipped "sold as-is" / "not sold separately" lines** | Only lines actually marked gone ("SOLD", "sold for $430", "traded to…", "pending") are skipped |
+| 28 | **More matching edge cases from a second review**: Ryzen 8000G "Radeon 780M Graphics" rejected as a GPU bundle; "5800X" matched the pricier 5800X3D; used posts saying "pulled from a prebuilt" or "PC & laptop" rejected as whole PCs; "iPhone 15 Pro, Max battery health" read as a Pro Max | All fixed, each with a test |
+| 29 | **"Metal Backplate" in a card's title got it rejected as junk** | Only backplates sold by themselves are rejected |
+| 30 | **"Database is locked"** possible when running an admin/update command while the app runs | Database switched to SQLite's WAL mode |
+| 31 | Walmart could alert on out-of-stock items; login tracker could grow without limit; muted/hidden listings still counted in the watch list; a few others | Fixed |
 
 ## ✨ New and improved (polish + visuals)
 - **🏆 "Lowest ever"** and **NEW** badges (new since your last visit; watches with new finds get a NEW tag too).
@@ -50,12 +57,14 @@ If you like it, tell Claude "merge the overnight branch" (or merge it on GitHub)
 - **Scam check:** also flags "small deposit to hold", money orders, "deployed / overseas" stories and "codes only", and multi-option eBay listings where the price may not be for this item. Honest "no deposits, no holds" wording is *not* flagged.
 - **Accessibility:** passes WCAG 2.2 AA checks (axe) on every screen, in light and dark mode. That covers contrast, labels, tap sizes and keyboard focus.
 - **Security:** security headers, cross-site requests blocked, listing links must be real web links.
+- **Desktop:** the New watch form and watch list stay on screen while you scroll results (screenshot 32).
+- **Phones:** after *Start watching* you're taken straight to the results; **↑ Top** button on long lists; unread alerts are tracked per account on shared computers.
 - **Phones:** a *Switch watch* menu and a **＋ New watch** button at the top, so you don't scroll past every result (screenshot 31).
 - **Browser tab** shows unread alerts, e.g. "(3) Price Sniper"; results refresh as soon as you come back to the tab.
 - **Pop-ups** stay open while you point at them, and have a ✕ close button. Screen readers no longer read the update countdown out every second.
 - **Pinned library versions** (`constraints.txt`), so a library update can't break your server by surprise.
 
-Screenshots: `docs/screenshots/25` through `31`.
+Screenshots: `docs/screenshots/25` through `32`.
 
 Also checked: everything installs and passes on **Python 3.11** (the version on Debian 12 / Google Cloud's free server), not just the newest Python.
 
