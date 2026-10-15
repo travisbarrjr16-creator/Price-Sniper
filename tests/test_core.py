@@ -847,3 +847,32 @@ def test_real_store_titles_match_their_part():
         assert ok(q, t)[0], (q, t, ok(q, t)[1])
     for q, t in bad:
         assert not ok(q, t)[0], (q, t)
+
+
+def test_second_review_matching_cases():
+    from sniper.matching import match
+    cases = [("ryzen 7 8700g", "AMD Ryzen 7 8700G 8-Core Desktop Processor with Radeon 780M Graphics", True),
+             ("ryzen 7 5800x", "AMD Ryzen 7 5800X3D", False),
+             ("ryzen 7 7800x3d", "AMD Ryzen 7 7800X3D 8-Core", True),
+             ("ryzen 7 5800x", "AMD Ryzen 7 5800X 8-core", True),
+             ("rtx 4070", "RTX 4070 pulled from prebuilt", True),
+             ("rtx 4060", "RTX 4060 pulled from Dell desktop", True),
+             ("rtx 3070", "RTX 3070 used in my gaming pc for 1 year", True),
+             ("ddr5 32gb", "32GB DDR5 pulled from a Dell XPS laptop", True),
+             ("990 pro 2tb", "Samsung 990 PRO 2TB NVMe - PC & laptop", True),
+             ("ryzen 5 7600x", "Ryzen 5 7600X Plus free cooler", True),
+             ("iphone 15 pro", "iPhone 15 Pro, Max battery health 100%", True),
+             ("iphone 15 pro", "iPhone 15 Pro Max 256GB", False),
+             ("rtx 4060", "Gaming PC RTX 4060 Ryzen 5 5600", False),
+             ("ddr4 16gb", "Dell OptiPlex Desktop Computer 16GB DDR4 i5", False)]
+    for q, t, expected in cases:
+        got = match(Listing(source="T", source_id="1", title=t, url="https://x", price=100, condition="new"),
+                    Watch(query=q))[0]
+        assert got == expected, (q, t)
+
+
+def test_hws_sold_variants_second_pass():
+    from sniper.sources.reddit import live_lines
+    for l in ["RTX 3080 FE - $450 - SOLD for $430", "3080 - sold locally", "3080 - traded for a 6800",
+              "3080 - Sold in person", "3080 - pending with u/x"]:
+        assert live_lines(l) == [], l

@@ -25,10 +25,11 @@ MAX_AGE_DAYS = 7
 
 _PRICE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?(\s?k\b)?", re.I)   # $230, $1,299.99, $1.2k
 _STRIKE = re.compile(r"~~.*?~~", re.S)
-# "SOLD", "traded to u/x", "pending", "gone" mark an item as gone; "sold as-is", "not sold separately",
-# "can be sold together", "price has gone down" do not.
-_SOLD = re.compile(r"(?<!not )(?<!be )(?<!been )(?<!has )(?<!have )\b(sold|traded|gone|pending)\b"
-                   r"(?! (as|separately|together|with|only|locally|individually|in|first|down|up|for)\b)", re.I)
+# "SOLD", "sold for $430", "traded to u/x", "pending", "gone" mark an item as gone. Only a few phrasings
+# are ordinary wording: "sold as-is", "not sold separately", "can be sold together", "price has gone down".
+_SOLD = re.compile(r"\bpending\b"
+                   r"|(?<!not )(?<!be )(?<!been )\b(sold|traded)\b(?! (as[- ]?is|separately|together|individually|as a)\b)"
+                   r"|(?<!has )(?<!have )(?<!had )\bgone\b(?! (down|up)\b)", re.I)
 _HWS_TITLE = re.compile(r"^\s*\[(?P<loc>[A-Z]{2,3}(?:-[A-Z]{2})?)\]\s*\[H\](?P<have>.*?)\[W\](?P<want>.*)$", re.I)
 _TRADES = re.compile(r"trades?\s*:\s*(\d+)", re.I)
 _MONEY_WORDS = ("paypal", "cash", "venmo", "zelle", "money", "$")

@@ -327,13 +327,19 @@ class DB:
             )
         return self.get_watch(w.id)
 
-    def finish_check(self, wid: int, checked_at: str, error: Optional[str], clear_rearm: bool = False) -> None:
-        """Record a finished check without touching the settings, so edits made meanwhile are kept."""
+    def finish_check(self, wid: int, checked_at: str, error: Optional[str], clear_rearm: bool = False,
+                     limits: tuple = (None, None)) -> None:
+        """Record a finished check without touching the settings, so edits made meanwhile are kept.
+
+        The "re-check known listings" flag is cleared only if max/target are still the ones this
+        check used; if they were edited again meanwhile, the next check does the summary for them.
+        """
         with self.lock, self.conn:
             self.conn.execute(
                 "UPDATE watches SET last_checked_at=?, last_error=?, "
-                "data=CASE WHEN ? THEN json_set(data, '$.rearm', json('false')) ELSE data END WHERE id=?",
-                (checked_at, error, int(clear_rearm), wid),
+                "data=CASE WHEN ? AND json_extract(data, '$.max_price') IS ? AND json_extract(data, '$.target_price') IS ? "
+                "THEN json_set(data, '$.rearm', json('false')) ELSE data END WHERE id=?",
+                (checked_at, error, int(clear_rearm), limits[0], limits[1], wid),
             )
 
     def get_watch(self, wid: int) -> Optional[Watch]:

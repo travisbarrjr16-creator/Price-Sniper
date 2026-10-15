@@ -225,7 +225,8 @@ class Watcher:
 
         watch.last_checked_at = ts
         watch.last_error = "; ".join(errors) or None
-        self.db.finish_check(watch.id, ts, watch.last_error, clear_rearm=used_rearm)
+        self.db.finish_check(watch.id, ts, watch.last_error, clear_rearm=used_rearm,
+                             limits=(watch.max_price, watch.target_price))
         stats = {
             "checked_at": ts,
             "sources": [s.name for s in sources],

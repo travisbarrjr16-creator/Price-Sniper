@@ -13,10 +13,10 @@ from .models import Listing, Watch
 VARIANT_SUFFIXES = {
     "ti", "super", "xt", "xtx", "gre", "pro", "max", "plus", "ultra", "mini",
     "lite", "fe",
-    "x", "k", "kf", "f", "ks", "g",       # CPU models: 7600 vs 7600X, 13600K vs 13600KF
+    "x", "k", "kf", "f", "ks", "g", "x3d",   # CPU models: 7600 vs 7600X, 13600K vs 13600KF, 5800X vs 5800X3D
 }
 # ...but only when written stuck to the number ("7600X"), not "RTX 4060 x2 fans"
-GLUED_SUFFIXES = {"x", "k", "kf", "f", "ks", "g"}
+GLUED_SUFFIXES = {"x", "k", "kf", "f", "ks", "g", "x3d"}
 # "fe" (Founders Edition) is the same GPU, so it is not treated as a variant.
 NON_VARIANT = {"fe"}
 
@@ -28,6 +28,8 @@ JUNK_PHRASES = [
     "photo of", "wtb", "wanted", "looking for", "iou", "read description",
     "parts only", "cracked", "no display", "artifacting",
 ]
+
+_PLUS_EXTRAS = {"free", "a", "bonus", "extra", "box", "cooler", "shipping", "games", "game", "case", "controller"}
 
 # Card features, not accessories, when the title also describes the card itself ("Metal Backplate, 10GB GDDR6X")
 _FEATURE_WORDS = {"backplate", "shroud"}
@@ -58,7 +60,11 @@ _PART_WORDS = (r"(?:processors?|cpus?|memory|ram|graphics(?: cards?)?|gpus?|vide
 _DESCRIPTIVE_RE = re.compile(
     rf"\b(?:{_PC} ){{1,3}}{_PART_WORDS}\b"                              # "desktop processor", "laptop memory"
     rf"|\b(?:for|in|fits|upgrade|compatible with|works with) (?:your |a |most |any )?{_PC}(?: (?:and |or )?{_PC})*\b"
-    r"|\b(?:amd )?radeon(?: vega| rx vega)?(?: \d{1,3}m?)? graphics\b|\b(?:intel )?(?:uhd|iris xe|integrated) graphics\b"
+    rf"|\b(?:pulled|removed|taken|came) (?:out )?(?:of|from) (?:an? |my |the |his )?(?:[a-z0-9]+ ){{0,2}}?(?:{_PC}|pre ?built)\b"
+    rf"|\bused in (?:my |a |the )?(?:{_PC} ){{0,2}}(?:{_PC}|pre ?built|build)\b"   # "pulled from a Dell desktop"
+    r"|\b(?:pcs?|desktops?) (?:and |or )?laptops?\b|\blaptops? (?:and |or )?(?:pcs?|desktops?)\b"  # "PC & laptop"
+    rf"|\b{_PC} (?:power )?(?:cables?|cords?|adapters?)\b"
+    r"|\b(?:amd )?radeon(?: vega| rx vega)?(?: \d{1,4}(?: ?m)?)? graphics\b|\b(?:intel )?(?:uhd|iris xe|integrated) graphics\b"
     r"|\b(?:for|with|compatible with|optimized for|supports?) (?:amd |intel )*(?:ryzen|core|amd|intel|expo|xmp)\b"
     r"|\b(?:amd )?expo\b|\b(?:intel )?xmp(?: \d(?:\.\d)?)?\b")
 # For a GPU search, a title that also names a CPU is a PC or a bundle (and the other way around).
@@ -103,6 +109,7 @@ def normalize(text: str) -> str:
     # ...but keep units glued back together, and kits like "2 x 16gb" as one word
     t = _UNIT_RE.sub(r"\1\2", t)
     t = _KIT_RE.sub(r"\1x\2", t)
+    t = re.sub(r"\bx 3 d\b", "x3d", t)                     # "5800X3D" -> "5800 x3d", not the "5800X"
     return re.sub(r"\s+", " ", t).strip()
 
 
@@ -180,6 +187,10 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
                 nxt = title_tokens[i + 1]
                 if nxt in GLUED_SUFFIXES and not re.search(rf"(?<![a-z0-9]){tok}{nxt}", listing.title.lower()):
                     continue
+                if not tok.isdigit() and not re.search(rf"(?<![a-z0-9]){tok} +{nxt}(?![a-z0-9])", listing.title.lower()):
+                    continue        # "iPhone 15 Pro, Max battery health": a comma between, not "Pro Max"
+                if nxt == "plus" and i + 2 < len(title_tokens) and title_tokens[i + 2] in _PLUS_EXTRAS:
+                    continue        # "7600X Plus free cooler"
                 if nxt in VARIANT_SUFFIXES and nxt not in NON_VARIANT and nxt not in query_set:
                     return False, f"variant '{tok} {nxt}'"
 
