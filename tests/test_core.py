@@ -785,3 +785,13 @@ def test_edits_and_deletes_during_a_check_are_respected(tmp_path):
     w2 = db.create_watch(Watch(query="RTX 4060"))
     stats = asyncio.run(Watcher(db, sources=[DeletingSource()]).check(w2))
     assert stats["matched"] == 0 and db.get_listing_rows(w2.id) == []      # nothing saved for a deleted watch
+
+
+def test_backplate_feature_vs_backplate_for_sale():
+    from sniper.matching import match
+    def ok(t):
+        return match(Listing(source="T", source_id="1", title=t, url="https://x", price=50, condition="new"),
+                     Watch(query="RTX 3080"))[0]
+    assert ok("EVGA GeForce RTX 3080 FTW3 Ultra Gaming, 10GB GDDR6X, ARGB LED, Metal Backplate, LHR")
+    assert not ok("EVGA RTX 3080 FTW3 backplate")
+    assert not ok("Backplate for RTX 3080 10GB FTW3")

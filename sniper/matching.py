@@ -26,6 +26,11 @@ JUNK_PHRASES = [
     "parts only", "cracked", "no display", "artifacting",
 ]
 
+# Card features, not accessories, when the title also describes the card itself ("Metal Backplate, 10GB GDDR6X")
+_FEATURE_WORDS = {"backplate", "shroud"}
+_WHOLE_CARD_RE = re.compile(r"\b(gddr ?\d\w*|\d+gb|graphics card|video card)\b")
+_ACCESSORY_RE = re.compile(r"\b(backplate|shroud)s? (for|only)\b|\b(only|just) (the )?(backplate|shroud)\b")
+
 # --- PC parts: a search for one part shouldn't match a whole computer or a bundle -------------
 # Which kind of part a search is for, by keywords in the (normalized) search.
 _PART_KINDS = {
@@ -157,6 +162,8 @@ def match(listing: Listing, watch: Watch) -> tuple[bool, str | None]:
 
     for phrase in JUNK_PHRASES:
         if _has_term(title, phrase) and not _has_term(normalize(watch.query), phrase):
+            if phrase in _FEATURE_WORDS and _WHOLE_CARD_RE.search(title) and not _ACCESSORY_RE.search(title):
+                continue
             return False, f"junk '{phrase}'"
 
     if watch.strict_variants:
