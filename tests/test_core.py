@@ -759,3 +759,29 @@ def test_part_descriptions_are_not_whole_systems():
                ("rtx 4060", "Lot of 3 RTX 4060")]
     for q, t in systems:
         assert why(t, q), t
+
+
+def test_edits_and_deletes_during_a_check_are_respected(tmp_path):
+    db = DB(str(tmp_path / "race.db"))
+    w = db.create_watch(Watch(query="RTX 4060", max_price=200))
+
+    class EditingSource(FakeSource):
+        async def search(self, watch, client):
+            cur = db.get_watch(watch.id)          # the user edits the watch while the sites answer
+            cur.max_price, cur.target_price, cur.rearm = 300, 250, True
+            db.update_watch(cur)
+            return [L("RTX 4060 a", 240, shipping=0, condition="new")]
+
+    asyncio.run(Watcher(db, sources=[EditingSource()]).check(w))
+    after = db.get_watch(w.id)
+    assert (after.max_price, after.target_price) == (300, 250) and after.last_checked_at   # edit kept
+    assert not after.rearm and any("250 target" in a["reason"] for a in db.list_alerts())   # new target used
+
+    class DeletingSource(FakeSource):
+        async def search(self, watch, client):
+            db.delete_watch(watch.id)
+            return [L("RTX 4060 b", 199, shipping=0, condition="new")]
+
+    w2 = db.create_watch(Watch(query="RTX 4060"))
+    stats = asyncio.run(Watcher(db, sources=[DeletingSource()]).check(w2))
+    assert stats["matched"] == 0 and db.get_listing_rows(w2.id) == []      # nothing saved for a deleted watch

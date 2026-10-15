@@ -106,7 +106,8 @@ class Watcher:
                 log.exception("could not load watches")
                 watches = []
             for w in watches:
-                if not (w.active and self._due(w)):
+                w = self.db.get_watch(w.id)      # earlier checks take a while: use the latest settings
+                if not (w and w.active and self._due(w)):
                     continue
                 try:
                     await self.check(w)
@@ -114,10 +115,8 @@ class Watcher:
                     # One broken watch must not block the others, or retry every 20s and burn API quota:
                     # record the error and wait for its normal interval.
                     log.exception("watch %s failed", w.id)
-                    w.last_checked_at = utcnow().isoformat()
-                    w.last_error = f"Check failed: {type(e).__name__}: {e}"[:300]
                     try:
-                        self.db.update_watch(w)
+                        self.db.finish_check(w.id, utcnow().isoformat(), f"Check failed: {type(e).__name__}: {e}"[:300])
                     except Exception:
                         log.exception("could not record failure for watch %s", w.id)
             await asyncio.sleep(20)
@@ -156,6 +155,15 @@ class Watcher:
                     # only real web links: a "javascript:" or other odd URL must never become an Open button
                     raw.extend(l for l in res if str(l.url).lower().startswith(("https://", "http://"))
                                and l.price > 0)     # a missing price shows up as $0: never a "deal"
+
+            # The sites can take a minute: pick up edits made meanwhile, and stop if the watch
+            # (or its whole account) was deleted, so nothing is saved for it.
+            fresh = self.db.get_watch(watch.id)
+            if fresh is None:
+                return {"checked_at": utcnow().isoformat(), "sources": [s.name for s in sources], "fetched": len(raw),
+                        "matched": 0, "visible": 0, "hidden_risky": 0, "rejected": {}, "alerts": 0,
+                        "errors": ["watch was deleted during the check"]}
+            watch = fresh
 
             # Strict matching
             rejected = Counter()
@@ -196,7 +204,7 @@ class Watcher:
             # A fresh watch, or one whose max/target was just edited, gets one summary of what already qualifies
             first_run = not existing or watch.rearm
             alerts = self._pick_alerts(watch, alertable, existing, prev_lowest, first_run)
-            watch.rearm = False
+            used_rearm, watch.rearm = watch.rearm, False
 
             ts = now.isoformat()
             for s in scored:
@@ -217,7 +225,7 @@ class Watcher:
 
         watch.last_checked_at = ts
         watch.last_error = "; ".join(errors) or None
-        self.db.update_watch(watch)
+        self.db.finish_check(watch.id, ts, watch.last_error, clear_rearm=used_rearm)
         stats = {
             "checked_at": ts,
             "sources": [s.name for s in sources],

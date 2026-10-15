@@ -327,6 +327,15 @@ class DB:
             )
         return self.get_watch(w.id)
 
+    def finish_check(self, wid: int, checked_at: str, error: Optional[str], clear_rearm: bool = False) -> None:
+        """Record a finished check without touching the settings, so edits made meanwhile are kept."""
+        with self.lock, self.conn:
+            self.conn.execute(
+                "UPDATE watches SET last_checked_at=?, last_error=?, "
+                "data=CASE WHEN ? THEN json_set(data, '$.rearm', json('false')) ELSE data END WHERE id=?",
+                (checked_at, error, int(clear_rearm), wid),
+            )
+
     def get_watch(self, wid: int) -> Optional[Watch]:
         r = self._read_one("SELECT * FROM watches WHERE id=?", (wid,))
         return self._row_to_watch(r) if r else None
