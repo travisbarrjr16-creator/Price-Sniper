@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Price Sniper</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4; --surface: #fcfcfb; --surface-2: #efeeea; --border: #dddcd6;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #85837d;
+  --accent: #2a78d6; --accent-ink: #fff;
+  --series-new: #2a78d6; --series-used: #eb6834;
+  --good: #0a7a3d; --good-bg: #e3f4ea; --warn: #8a5a00; --warn-bg: #fbf0d6;
+  --bad: #b42323; --bad-bg: #fbe4e4; --neutral-bg: #ecebe7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --surface-2: #242422; --border: #34332f;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8d85;
+    --accent: #3987e5; --series-new: #3987e5; --series-used: #d95926;
+    --good: #6fd39a; --good-bg: #173524; --warn: #f0c060; --warn-bg: #3a2d10;
+    --bad: #f08a8a; --bad-bg: #3d1a1a; --neutral-bg: #2a2a27;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --surface-2: #242422; --border: #34332f;
+  --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8d85;
+  --accent: #3987e5; --series-new: #3987e5; --series-used: #d95926;
+  --good: #6fd39a; --good-bg: #173524; --warn: #f0c060; --warn-bg: #3a2d10;
+  --bad: #f08a8a; --bad-bg: #3d1a1a; --neutral-bg: #2a2a27;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0; }
+header .status { color: var(--muted); font-size: 12px; margin-left: auto; text-align: right; }
+.layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 16px; max-width: 1280px; margin: 0 auto; }
+@media (max-width: 820px) { .layout { grid-template-columns: 1fr; } main { order: -1; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); margin: 0 0 10px; }
+label { display: block; font-size: 12px; color: var(--text-2); margin: 8px 0 3px; }
+input, select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font: inherit; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+.checks label { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--text); font-size: 13px; }
+.checks input { width: auto; }
+button { font: inherit; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); padding: 7px 12px; border-radius: 7px; cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: .6; cursor: progress; }
+details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin-top: 10px; }
+.watch { padding: 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+.watch:hover { background: var(--surface-2); }
+.watch.sel { border-color: var(--accent); background: var(--surface-2); }
+.watch .q { font-weight: 600; }
+.watch .meta { font-size: 12px; color: var(--muted); }
+.stack > * + * { margin-top: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.tile .k { font-size: 12px; color: var(--text-2); }
+.tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12px; color: var(--muted); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.filtered { font-size: 12px; color: var(--muted); }
+.list { display: flex; flex-direction: column; gap: 8px; }
+.item { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.item.hidden { opacity: .6; border-style: dashed; }
+.item img, .item .ph { width: 64px; height: 64px; object-fit: contain; border-radius: 6px; background: var(--surface-2); }
+.item .t { font-weight: 550; overflow-wrap: anywhere; }
+.item .m { font-size: 12px; color: var(--text-2); display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
+.item .price { text-align: right; min-width: 110px; }
+.item .total { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.item .bd { font-size: 11px; color: var(--muted); }
+.item a.open { display: inline-block; margin-top: 4px; padding: 5px 10px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-size: 13px; }
+@media (max-width: 560px) { .item { grid-template-columns: 48px 1fr; } .item img, .item .ph { width: 48px; height: 48px; } .item .price { grid-column: 1 / -1; text-align: left; display: flex; gap: 12px; align-items: center; } }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--neutral-bg); color: var(--text-2); }
+.badge.great, .badge.good { background: var(--good-bg); color: var(--good); }
+.badge.high { background: var(--warn-bg); color: var(--warn); }
+.badge.suspicious, .badge.risk { background: var(--bad-bg); color: var(--bad); }
+.chart-wrap { position: relative; }
+.chart-wrap svg { width: 100%; height: 220px; display: block; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); display: none; white-space: nowrap; }
+.empty { color: var(--muted); padding: 30px 10px; text-align: center; }
+.err { color: var(--bad); font-size: 12px; }
+#toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 10; max-width: calc(100vw - 32px); }
+.toast { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--good); border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.15); width: 320px; max-width: 100%; }
+.toast a { color: var(--accent); }
+table.hist { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+table.hist td, table.hist th { padding: 3px 6px; border-bottom: 1px solid var(--border); text-align: right; }
+table.hist th:first-child, table.hist td:first-child { text-align: left; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎯 Price Sniper</h1>
+  <div class="status" id="status"></div>
+</header>
+
+<div class="layout">
+  <aside class="stack">
+    <div class="card">
+      <h2>New watch</h2>
+      <form id="f">
+        <label>Item (model / SKU)</label>
+        <input name="query" placeholder="RTX 4060" required>
+        <div class="row">
+          <div><label>Max total $</label><input name="max_price" type="number" step="1" placeholder="290"></div>
+          <div><label>Check every (min)</label><input name="interval_minutes" type="number" value="15" min="1"></div>
+        </div>
+        <label>Condition</label>
+        <div class="checks" id="conds"></div>
+        <div class="row">
+          <div><label>ZIP (for local)</label><input name="zip_code" placeholder="78701"></div>
+          <div><label>Radius (mi)</label><input name="radius_miles" type="number" placeholder="40"></div>
+        </div>
+        <details>
+          <summary>Smart filters & tax</summary>
+          <label>Must include (comma-sep)</label><input name="required_terms" placeholder="8gb">
+          <label>Exclude (comma-sep)</label><input name="excluded_terms" placeholder="laptop, low profile">
+          <label>Sales tax %</label><input name="tax_rate" type="number" step="0.01" placeholder="8.25">
+          <div class="checks" style="margin-top:8px">
+            <label><input type="checkbox" name="strict_variants" checked> Exact model (no Ti/Super/Pro)</label>
+            <label><input type="checkbox" name="hide_risky" checked> Hide likely scams</label>
+            <label><input type="checkbox" name="include_auctions"> Include auctions</label>
+          </div>
+        </details>
+        <div style="margin-top:12px"><button class="primary" id="add" type="submit">Start watching</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Watching</h2>
+      <div id="watches"><div class="empty">Nothing yet.</div></div>
+    </div>
+  </aside>
+
+  <main class="stack" id="main">
+    <div class="card empty">Create a watch to start sniping. Results from every source land here, sorted by what you'd actually pay.</div>
+  </main>
+</div>
+<div id="toasts"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = v => v == null ? "—" : "$" + Number(v).toFixed(2);
+const COND = {new: "New", open_box: "Open box", refurbished: "Refurb", used: "Used", parts: "For parts"};
+const DEAL = {great: "Great deal", good: "Good price", fair: "Typical price", high: "Above typical", suspicious: "Too good to be true"};
+let state = {watches: [], sel: null, sort: "total", showHidden: false, lastAlert: null};
+try { state.sort = localStorage.getItem("sort") || "total"; } catch {}
+
+const api = async (path, opts = {}) => {
+  const r = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opts});
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+};
+
+$("#conds").innerHTML = Object.entries(COND).filter(([k]) => k !== "parts")
+  .map(([k, v]) => `<label><input type="checkbox" value="${k}" checked> ${v}</label>`).join("");
+
+$("#f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target), list = s => (s || "").split(",").map(x => x.trim()).filter(Boolean);
+  const num = k => f.get(k) ? Number(f.get(k)) : null;
+  const body = {
+    query: f.get("query").trim(), max_price: num("max_price"), interval_minutes: num("interval_minutes") || 15,
+    zip_code: f.get("zip_code") || null, radius_miles: num("radius_miles"),
+    conditions: [...document.querySelectorAll("#conds input:checked")].map(i => i.value),
+    required_terms: list(f.get("required_terms")), excluded_terms: list(f.get("excluded_terms")),
+    tax_rate: (num("tax_rate") || 0) / 100,
+    strict_variants: f.get("strict_variants") === "on", hide_risky: f.get("hide_risky") === "on",
+    include_auctions: f.get("include_auctions") === "on",
+  };
+  const btn = $("#add"); btn.disabled = true; btn.textContent = "Searching…";
+  try {
+    const w = await api("/api/watches", {method: "POST", body: JSON.stringify(body)});
+    state.sel = w.id; e.target.reset(); document.querySelectorAll("#conds input").forEach(i => i.checked = true);
+    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+    await refresh();
+  } catch (err) { alert(err.message); }
+  btn.disabled = false; btn.textContent = "Start watching";
+});
+
+async function refresh() {
+  state.watches = await api("/api/watches");
+  if (!state.sel && state.watches.length) state.sel = state.watches[0].id;
+  renderWatches();
+  if (state.sel) await renderMain();
+}
+
+function renderWatches() {
+  const el = $("#watches");
+  if (!state.watches.length) { el.innerHTML = '<div class="empty">Nothing yet.</div>'; return; }
+  el.innerHTML = state.watches.map(w => `
+    <div class="watch ${w.id === state.sel ? "sel" : ""}" data-id="${w.id}">
+      <div class="q">${esc(w.query)}${w.active ? "" : " (paused)"}</div>
+      <div class="meta">${w.count} listings · lowest ${money(w.lowest)}${w.max_price ? ` · max $${w.max_price}` : ""}</div>
+    </div>`).join("");
+  el.querySelectorAll(".watch").forEach(d => d.onclick = () => { state.sel = +d.dataset.id; renderWatches(); renderMain(); });
+}
+
+async function renderMain() {
+  const w = state.watches.find(x => x.id === state.sel);
+  if (!w) return;
+  const [items, hist] = await Promise.all([
+    api(`/api/watches/${w.id}/listings?sort=${state.sort}&include_hidden=${state.showHidden}`),
+    api(`/api/watches/${w.id}/history`),
+  ]);
+  const visible = items.filter(i => !i.hidden);
+  const best = visible.reduce((a, b) => (!a || b.total_cost < a.total_cost ? b : a), null);
+  const st = w.stats;
+  const rej = st ? Object.entries(st.rejected).map(([k, v]) => `${v} ${k}`).join(", ") : "";
+  const ref = hist.reference;
+
+  $("#main").innerHTML = `
+    <div class="card">
+      <div class="toolbar" style="justify-content:space-between">
+        <div><div style="font-size:18px;font-weight:650">${esc(w.query)}</div>
+          <div class="filtered">${w.last_checked_at ? "Checked " + new Date(w.last_checked_at).toLocaleTimeString() : "Not checked yet"} · every ${w.interval_minutes} min</div>
+          ${w.last_error ? `<div class="err">${esc(w.last_error)}</div>` : ""}</div>
+        <div class="toolbar">
+          <button id="chk">Check now</button>
+          <button id="pause">${w.active ? "Pause" : "Resume"}</button>
+          <button id="del">Delete</button>
+        </div>
+      </div>
+      <div class="tiles" style="margin-top:12px">
+        <div class="tile"><div class="k">Lowest total</div><div class="v">${money(best?.total_cost)}</div><div class="s">${best ? esc(best.source) + " · " + COND[best.condition] : "no matches"}</div></div>
+        <div class="tile"><div class="k">Typical new</div><div class="v">${money(ref.new.typical)}</div><div class="s">${ref.new.sample_size} listings, 30 days</div></div>
+        <div class="tile"><div class="k">Typical used</div><div class="v">${money(ref.used.typical)}</div><div class="s">${ref.used.sample_size} listings, 30 days</div></div>
+        <div class="tile"><div class="k">Your max</div><div class="v">${w.max_price ? "$" + w.max_price : "—"}</div><div class="s">${visible.filter(i => w.max_price && i.total_cost <= w.max_price).length} under it now</div></div>
+      </div>
+    </div>
+    <div class="card"><h2>Lowest price over time</h2><div id="chart"></div></div>
+    <div class="card">
+      <div class="toolbar" style="margin-bottom:10px">
+        <div class="seg" id="sort">${[["total","Cheapest"],["value","Best value"],["distance","Nearest"],["newest","Newest"]]
+          .map(([k, v]) => `<button data-k="${k}" class="${state.sort === k ? "on" : ""}">${v}</button>`).join("")}</div>
+        <label class="checks" style="margin:0"><label><input type="checkbox" id="sh" ${state.showHidden ? "checked" : ""}> Show hidden scams</label></label>
+        <span class="filtered">${st ? `${st.fetched} fetched → ${st.matched} matched${rej ? ` (filtered: ${esc(rej)})` : ""}${st.hidden_risky ? `, ${st.hidden_risky} flagged risky` : ""}` : ""}</span>
+      </div>
+      <div class="list">${items.length ? items.map(itemHTML).join("") : '<div class="empty">No matching listings right now. The watch keeps checking.</div>'}</div>
+    </div>`;
+
+  $("#chk").onclick = async e => { e.target.disabled = true; e.target.textContent = "Checking…"; await api(`/api/watches/${w.id}/check`, {method: "POST"}).catch(x => alert(x.message)); refresh(); };
+  $("#pause").onclick = async () => { await api(`/api/watches/${w.id}`, {method: "PUT", body: JSON.stringify({...w, active: !w.active})}); refresh(); };
+  $("#del").onclick = async () => { if (confirm(`Stop watching "${w.query}"?`)) { await api(`/api/watches/${w.id}`, {method: "DELETE"}); state.sel = null; refresh(); } };
+  $("#sort").querySelectorAll("button").forEach(b => b.onclick = () => { state.sort = b.dataset.k; try { localStorage.setItem("sort", state.sort); } catch {} renderMain(); });
+  $("#sh").onchange = e => { state.showHidden = e.target.checked; renderMain(); };
+  drawChart(hist.snapshots);
+}
+
+function itemHTML(i) {
+  const ship = i.local_pickup ? "local pickup" : i.shipping_estimated ? "+ship est." : i.shipping ? `+${money(i.shipping)} ship` : "free ship";
+  const deal = i.deal ? `<span class="badge ${i.deal.label}" title="Typical: ${money(i.deal.median)} (${i.deal.n} listings)">${DEAL[i.deal.label]} ${i.deal.pct_vs_median > 0 ? "+" : ""}${Math.round(i.deal.pct_vs_median)}%</span>` : "";
+  const seller = i.seller_name ? `${esc(i.seller_name)}${i.seller_rating != null ? ` ${i.seller_rating}%` : ""}${i.seller_feedback_count != null ? ` (${i.seller_feedback_count})` : ""}` : "";
+  const risk = i.risk_flags.length ? `<span class="badge risk" title="${esc(i.risk_flags.join("; "))}">⚠ ${esc(i.risk_flags[0])}${i.risk_flags.length > 1 ? ` +${i.risk_flags.length - 1}` : ""}</span>` : "";
+  return `<div class="item ${i.hidden ? "hidden" : ""}">
+    ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : '<div class="ph"></div>'}
+    <div>
+      <div class="t">${esc(i.title)}</div>
+      <div class="m"><span><b>${esc(i.source)}</b></span><span>${COND[i.condition] || i.condition}</span>
+        ${i.local_pickup && i.distance_miles != null ? `<span>📍 ${i.distance_miles} mi${i.location ? " · " + esc(i.location) : ""}</span>` : ""}
+        ${seller ? `<span>${seller}</span>` : ""}</div>
+      <div class="m" style="margin-top:4px">${deal}${risk}</div>
+    </div>
+    <div class="price">
+      <div><div class="total">${money(i.total_cost)}</div>
+      <div class="bd">${money(i.price)} ${ship}${i.tax ? ` + ${money(i.tax)} tax` : ""}</div></div>
+      <a class="open" href="${esc(i.url)}" target="_blank" rel="noopener">Open ↗</a>
+    </div></div>`;
+}
+
+function drawChart(snaps) {
+  const el = $("#chart");
+  if (snaps.length < 2) { el.innerHTML = '<div class="empty">History builds up as the watch runs.</div>'; return; }
+  const series = {new: [], used: []};
+  snaps.forEach(s => series[s.bucket].push({t: new Date(s.ts), v: s.min_total, med: s.median_total, n: s.count}));
+  const all = snaps.map(s => s.min_total), ts = snaps.map(s => +new Date(s.ts));
+  const W = el.clientWidth || 600, H = 220, P = {l: 48, r: 56, t: 10, b: 24};
+  const t0 = Math.min(...ts), t1 = Math.max(...ts) || t0 + 1;
+  let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * .15 || 10; lo -= pad; hi += pad;
+  const x = t => P.l + (t - t0) / ((t1 - t0) || 1) * (W - P.l - P.r);
+  const y = v => P.t + (1 - (v - lo) / (hi - lo)) * (H - P.t - P.b);
+  const ticks = [0, .5, 1].map(f => lo + (hi - lo) * f);
+  const names = {new: "New / open box", used: "Used / refurb"};
+  const color = {new: "var(--series-new)", used: "var(--series-used)"};
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Lowest total price over time">`;
+  ticks.forEach(v => svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${P.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">$${Math.round(v)}</text>`);
+  [t0, t1].forEach((t, k) => svg += `<text x="${x(t)}" y="${H - 6}" text-anchor="${k ? "end" : "start"}" font-size="11" fill="var(--muted)">${new Date(t).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})}</text>`);
+  for (const [b, pts] of Object.entries(series)) {
+    if (!pts.length) continue;
+    svg += `<path d="${pts.map((p, i) => (i ? "L" : "M") + x(+p.t) + " " + y(p.v)).join(" ")}" fill="none" stroke="${color[b]}" stroke-width="2" stroke-linejoin="round"/>`;
+    const last = pts[pts.length - 1];
+    svg += `<circle cx="${x(+last.t)}" cy="${y(last.v)}" r="4" fill="${color[b]}" stroke="var(--surface)" stroke-width="2"/>`;
+    svg += `<text x="${x(+last.t) + 8}" y="${y(last.v) + 4}" font-size="11" fill="var(--text-2)">$${Math.round(last.v)}</text>`;
+  }
+  svg += `<line id="xh" y1="${P.t}" y2="${H - P.b}" stroke="var(--muted)" stroke-dasharray="3 3" style="display:none"/><rect x="${P.l}" y="0" width="${W - P.l - P.r}" height="${H}" fill="transparent" id="hit"/></svg>`;
+  const legend = Object.keys(series).filter(b => series[b].length).map(b => `<span><i style="background:${color[b]}"></i>${names[b]}</span>`).join("");
+  const rows = snaps.slice(-12).reverse().map(s => `<tr><td>${new Date(s.ts).toLocaleString()}</td><td>${names[s.bucket]}</td><td>${money(s.min_total)}</td><td>${money(s.median_total)}</td><td>${s.count}</td></tr>`).join("");
+  el.innerHTML = `<div class="legend">${legend}</div><div class="chart-wrap">${svg}<div class="tip" id="tip"></div></div>
+    <details><summary>Table view</summary><table class="hist"><tr><th>Time</th><th>Bucket</th><th>Lowest</th><th>Median</th><th>Listings</th></tr>${rows}</table></details>`;
+  const hit = el.querySelector("#hit"), tip = el.querySelector("#tip"), xh = el.querySelector("#xh"), sv = el.querySelector("svg");
+  hit.addEventListener("mousemove", ev => {
+    const r = sv.getBoundingClientRect(), mx = (ev.clientX - r.left) * W / r.width;
+    const t = t0 + (mx - P.l) / (W - P.l - P.r) * (t1 - t0);
+    const near = pts => pts.reduce((a, p) => (!a || Math.abs(p.t - t) < Math.abs(a.t - t) ? p : a), null);
+    const n = near(series.new), u = near(series.used), ref = n || u;
+    xh.setAttribute("x1", x(+ref.t)); xh.setAttribute("x2", x(+ref.t)); xh.style.display = "";
+    tip.innerHTML = `<b>${ref.t.toLocaleString()}</b>` + [["new", n], ["used", u]].filter(([, p]) => p)
+      .map(([b, p]) => `<div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color[b]}"></i> ${names[b]}: <b>${money(p.v)}</b> (median ${money(p.med)})</div>`).join("");
+    tip.style.display = "block";
+    const left = x(+ref.t) / W * r.width;
+    tip.style.left = Math.min(left + 12, r.width - tip.offsetWidth - 4) + "px"; tip.style.top = "8px";
+  });
+  hit.addEventListener("mouseleave", () => { tip.style.display = "none"; xh.style.display = "none"; });
+}
+
+async function pollAlerts() {
+  try {
+    const list = await api(`/api/alerts?since_id=${state.lastAlert ?? 0}`);
+    if (state.lastAlert === null) { state.lastAlert = list[0]?.id ?? 0; return; }
+    for (const a of list.reverse()) {
+      state.lastAlert = Math.max(state.lastAlert, a.id);
+      const t = document.createElement("div"); t.className = "toast";
+      t.innerHTML = `<b>${money(a.total)}</b> · ${esc(a.reason)}<div style="font-size:12px;color:var(--text-2)">${esc(a.title)}</div><a href="${esc(a.url)}" target="_blank" rel="noopener">Open listing ↗</a>`;
+      $("#toasts").append(t); setTimeout(() => t.remove(), 15000);
+      if ("Notification" in window && Notification.permission === "granted") {
+        const n = new Notification(`${money(a.total)} — ${a.reason}`, {body: a.title}); n.onclick = () => window.open(a.url, "_blank");
+      }
+    }
+    if (list.length) refresh();
+  } catch {}
+}
+
+api("/api/status").then(s => $("#status").innerHTML = `Sources: ${esc(s.sources.join(", ") || "none")}<br>Push: ${esc(s.alert_channels.join(", ") || "browser only")}`);
+refresh(); pollAlerts();
+setInterval(pollAlerts, 20000);
+setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60000);
+</script>
+</body>
+</html>
