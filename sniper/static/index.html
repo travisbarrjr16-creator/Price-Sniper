@@ -737,9 +737,10 @@ function drawChart(snaps, w = {}) {
 }
 
 // 🔔 recent alerts: everything the watches found, even if you missed the pop-up
-const alertsSeen = {
-  get() { try { return +localStorage.getItem("alertsSeen") || 0; } catch { return 0; } },
-  set(id) { try { localStorage.setItem("alertsSeen", String(id)); } catch {} },
+const alertsSeen = {       // per account: friends may share a computer
+  key() { return "alertsSeen:" + (state.me?.id ?? ""); },
+  get() { try { return +localStorage.getItem(this.key()) || 0; } catch { return 0; } },
+  set(id) { try { localStorage.setItem(this.key(), String(id)); } catch {} },
 };
 async function updateBell() {
   try {
