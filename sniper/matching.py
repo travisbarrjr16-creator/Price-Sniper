@@ -41,6 +41,18 @@ _CONTAINER_RE = re.compile(
     r"\b(laptop|notebook|gaming pc|desktop|pre ?built|computer|tower pc|full (pc|build|system)|"
     r"complete (pc|build|system)|pc build|custom build|lot of \d+|\d+ ?(pcs|pieces|units)|lot|bundle|combo|"
     r"all in one|aio pc)\b")
+# Phrases that only describe the part, so they don't mean "a whole computer" or "comes with a CPU/GPU":
+# "Desktop Processor", "Desktop Memory", "SSD for Laptop & Desktop", "Ryzen 5700G with Radeon Graphics",
+# "DDR5 ... for AMD Ryzen / Intel".
+_PC = r"(?:laptops?|desktops?|notebooks?|pcs?|computers?|gaming)"
+_PART_WORDS = (r"(?:processors?|cpus?|memory|ram|graphics(?: cards?)?|gpus?|video cards?|ssds?|drives?|hard drives?|"
+               r"power suppl(?:y|ies)|psus?|motherboards?|kits?|modules?)")
+_DESCRIPTIVE_RE = re.compile(
+    rf"\b(?:{_PC} ){{1,3}}{_PART_WORDS}\b"                              # "desktop processor", "laptop memory"
+    rf"|\b(?:for|in|fits|upgrade|compatible with|works with) (?:your |a |most |any )?{_PC}(?: (?:and |or )?{_PC})*\b"
+    r"|\b(?:amd )?radeon(?: vega| rx vega)?(?: \d{1,3}m?)? graphics\b|\b(?:intel )?(?:uhd|iris xe|integrated) graphics\b"
+    r"|\b(?:for|with|compatible with|optimized for|supports?) (?:amd |intel )*(?:ryzen|core|amd|intel|expo|xmp)\b"
+    r"|\b(?:amd )?expo\b|\b(?:intel )?xmp(?: \d(?:\.\d)?)?\b")
 # For a GPU search, a title that also names a CPU is a PC or a bundle (and the other way around).
 _CROSS_KINDS = {"gpu": ("cpu",), "cpu": ("gpu",), "ram": ("gpu", "cpu"), "storage": ("gpu", "cpu")}
 
@@ -55,7 +67,7 @@ def whole_system_reason(title: str, query: str) -> str | None:
     kind = part_kind(query)
     if not kind:
         return None                     # only for PC-part searches: "computer" is fine in a Raspberry Pi search
-    t, q = normalize(title), normalize(query)
+    t, q = _DESCRIPTIVE_RE.sub(" ", normalize(title)), normalize(query)
     m = _CONTAINER_RE.search(t)
     if m and not _CONTAINER_RE.search(q):
         return f"not just the part ('{m.group(0)}')"

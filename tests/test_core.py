@@ -736,3 +736,26 @@ def test_push_payload_limits():
     assert len(discord["content"]) <= 2000 and discord["content"].endswith("https://ebay.com/itm/1")
     assert discord["allowed_mentions"] == {"parse": []}
     assert clip("é" * 10, 7) == "éé…"          # never splits a character
+
+
+def test_part_descriptions_are_not_whole_systems():
+    from sniper.matching import whole_system_reason as why
+    parts = [("ryzen 7 7800x3d", "AMD Ryzen 7 7800X3D 8-Core, 16-Thread Desktop Processor"),
+             ("ddr5 32gb", "Corsair Vengeance 32GB (2x16GB) DDR5 6000 Desktop Memory"),
+             ("ryzen 7 5700g", "AMD Ryzen 7 5700G with Radeon Graphics"),
+             ("ryzen 5 5600g", "AMD Ryzen 5 5600G with Radeon Vega 7 Graphics"),
+             ("2tb nvme sn850x", "WD Black SN850X 2TB NVMe SSD for Laptop & Desktop"),
+             ("rtx 4060", "MSI RTX 4060 Ventus 2X Desktop Graphics Card"),
+             ("ddr5 2x16 6000", "G.SKILL Flare X5 DDR5 32GB (2x16GB) 6000 AMD EXPO for Ryzen 7000"),
+             ("ddr4 16gb", "Crucial 16GB DDR4 3200 Laptop Memory SODIMM")]
+    for q, t in parts:
+        assert why(t, q) is None, t
+    systems = [("rtx 4060", "ASUS TUF Gaming Laptop RTX 4060 i7-13620H"),
+               ("rtx 4060", "Gaming PC RTX 4060 Ryzen 5 5600"),
+               ("rtx 4060", "iBUYPOWER Desktop RTX 4060 i5"),
+               ("ddr4 16gb", "Dell OptiPlex Desktop Computer 16GB DDR4 i5"),
+               ("rtx 4060", "RTX 4060 + Ryzen 5 7600 combo"),
+               ("ryzen 7 7800x3d", "Ryzen 7 7800X3D + RTX 4070 gaming desktop"),
+               ("rtx 4060", "Lot of 3 RTX 4060")]
+    for q, t in systems:
+        assert why(t, q), t
