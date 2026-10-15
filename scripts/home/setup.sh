@@ -133,7 +133,11 @@ fi
 # --- 5. Tailscale (private access for you + friends) ------------------------------------
 if [[ -n "$TS_URL" && $NO_SERVICE == 0 ]]; then
   say "Sharing it privately over Tailscale"
-  tailscale serve --bg "$PORT" || echo "Run this yourself if it failed: tailscale serve --bg $PORT"
+  if ! tailscale serve --bg "$PORT"; then
+    echo "Couldn't start 'tailscale serve' (on Linux it needs permission). Run these, then this script again:"
+    echo "  sudo tailscale set --operator=\$USER"
+    echo "  tailscale serve --bg $PORT"
+  fi
 fi
 
 say "Done!"

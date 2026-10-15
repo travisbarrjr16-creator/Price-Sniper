@@ -33,6 +33,7 @@ Use `git clone` rather than "Download ZIP"; updates need it. If the repo is priv
 ## 4. Install Tailscale on that computer
 1. Download it from [tailscale.com/download](https://tailscale.com/download), install, and **sign in** (Google, Microsoft, GitHub, or Apple account).
 2. Turn on secure web addresses: in the [admin console](https://login.tailscale.com/admin/dns), go to **DNS** → **Enable HTTPS** (HTTPS Certificates).
+3. **Linux only:** let your user control Tailscale: `sudo tailscale set --operator=$USER`
 
 ## 5. Run the setup script
 
