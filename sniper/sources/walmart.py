@@ -67,6 +67,7 @@ def parse_items(items: list[dict]) -> list[Listing]:
 class WalmartSource(Source):
     key = "walmart"
     name = "Walmart"
+    default_daily_limit = 5000      # conservative guess; set SNIPER_LIMIT_WALMART to your real quota
 
     def __init__(self) -> None:
         self.consumer_id = os.getenv("WALMART_CONSUMER_ID", "")

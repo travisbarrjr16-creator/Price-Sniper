@@ -59,6 +59,11 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
 - **Password reset without email:** the admin runs `python -m sniper.admin reset-link email` and sends the one-time link (24h, signs out other devices).
 - All scam reasons are shown as badges, not just the first one.
 
+### Shared daily limits
+- All users share the server's marketplace keys, so the app plans and counts requests per site per day.
+- New or resumed watches that wouldn't fit are refused with a suggested interval. A site that nears its limit is paused until midnight UTC with a message, and Settings shows a usage bar per site.
+- Defaults (eBay 5,000/day, etc.) are configurable with `SNIPER_LIMIT_<SITE>`.
+
 ### Accounts (multi-user)
 - Email + password sign-up and sign-in. Everyone's watches, results, alerts, and settings are private (tested).
 - Passwords are hashed (scrypt). Sessions are random tokens stored hashed (30 days). Stored Gmail tokens are encrypted.

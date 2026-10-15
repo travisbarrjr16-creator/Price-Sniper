@@ -16,6 +16,7 @@ CONDITION_MAP = {"new": "new", "refurbished": "refurbished", "pre-owned": "used"
 class BestBuySource(Source):
     key = "bestbuy"
     name = "Best Buy"
+    default_daily_limit = 50000
 
     def __init__(self) -> None:
         self.api_key = os.getenv("BESTBUY_API_KEY", "")

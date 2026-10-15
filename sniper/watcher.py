@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 import httpx
 
-from . import scoring
+from . import budget, scoring
 from .alerts import Notifier
 from .db import DB
 from .matching import match
@@ -39,8 +39,10 @@ def scored_to_dict(s: ScoredListing) -> dict:
 
 
 class Watcher:
-    def __init__(self, db: DB, notifier: Notifier | None = None, sources: list[Source] | None = None) -> None:
+    def __init__(self, db: DB, notifier: Notifier | None = None, sources: list[Source] | None = None,
+                 transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.db = db
+        self._transport = transport       # tests swap in a fake network
         self.notifier = notifier or Notifier()
         self._sources = sources
         self.last_stats: dict[int, dict] = {}
@@ -83,11 +85,16 @@ class Watcher:
             return await self._check(watch)
 
     async def _check(self, watch: Watch) -> dict:
-        sources = [s for s in self.sources if not watch.sources or s.key in watch.sources]
+        sources = []
         errors: list[str] = []
+        for s in budget.sources_for(watch, self.sources):
+            if why := budget.can_run(self.db, s, watch):
+                errors.append(why)          # daily limit reached: skip, don't fail
+            else:
+                sources.append(s)
         raw: list[Listing] = []
-        async with httpx.AsyncClient(timeout=20) as client:
-            results = await asyncio.gather(*(s.search(watch, client) for s in sources), return_exceptions=True)
+        async with httpx.AsyncClient(timeout=20, transport=self._transport) as client:
+            results = await asyncio.gather(*(self._search_counted(s, watch) for s in sources), return_exceptions=True)
             for s, res in zip(sources, results):
                 if isinstance(res, Exception):
                     errors.append(f"{s.name}: {res}")
@@ -169,6 +176,21 @@ class Watcher:
         }
         self.last_stats[watch.id] = stats
         return stats
+
+    async def _search_counted(self, source: Source, watch: Watch) -> list[Listing]:
+        """Run one source's search on its own client and record every request it sends."""
+        calls = 0
+
+        async def count(_request):
+            nonlocal calls
+            calls += 1
+
+        try:
+            async with httpx.AsyncClient(timeout=20, transport=self._transport,
+                                         event_hooks={"request": [count]}) as client:
+                return await source.search(watch, client)
+        finally:
+            self.db.add_usage(source.key, calls)
 
     def _pick_alerts(self, watch, visible, existing, prev_lowest, first_run) -> list[tuple[ScoredListing, str, bool]]:
         """Returns (listing, reason, urgent). Kinds, most important first:

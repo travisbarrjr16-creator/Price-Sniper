@@ -43,6 +43,15 @@ the whole flow right away.
 - **Quiet hours** (Settings): no phone push during the set hours. You can let urgent alerts through. Alerts are still saved in the app.
 - **Password reset without email:** the admin runs `python -m sniper.admin reset-link person@example.com` and sends the person the one-time link (valid 24h). Using it signs them out everywhere else. `python -m sniper.admin users` lists accounts.
 
+## Shared daily limits
+
+Everyone's searches use the same marketplace keys, and each site caps requests per day (eBay's default is about 5,000). The app keeps everyone inside those caps:
+- **Planning:** a new or resumed watch is refused if all active watches together would need more than 90% of a site's daily limit. The message suggests a check interval that would fit ("Set this watch to check every 30 minutes or more…").
+- **Running:** every real request is counted. If a site gets near its limit, it's skipped until midnight UTC with a clear message on the watch, instead of failed searches.
+- **Settings → Shared daily search limits** shows each site's usage today and what all watches need per day.
+
+Rule of thumb for eBay: one watch checking every 15 minutes with local pickup uses about 190 requests a day, so about 25 such watches across all users. Set each site's real quota with `SNIPER_LIMIT_<SITE>` in `.env`.
+
 ## Accounts
 
 Each person signs up with an email and password. Watches, results, alerts,

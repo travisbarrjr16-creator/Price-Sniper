@@ -118,6 +118,11 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .item .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .item .acts button { font-size: 12px; padding: 3px 8px; }
 .item.dismissed { opacity: .55; }
+.usage { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; font-size: 13px; }
+.usage .bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.usage .bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.usage .bar i.hot { background: var(--orange-line); }
+.usage .sub { grid-column: 2; font-size: 12px; color: var(--muted); margin-top: -2px; }
 .mutelist { list-style: none; padding: 0; margin: 4px 0 0; max-height: 160px; overflow: auto; }
 .mutelist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .mutelist button { font-size: 12px; padding: 2px 8px; }
@@ -193,6 +198,8 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
     </div>
     <div class="checks" style="margin-top:6px"><label><input type="checkbox" name="quiet_allow_urgent" checked> Still buzz for 🎯 target hits, 🔥 new lows and great deals</label></div>
     <div class="hint">Leave both blank for no quiet hours. Alerts during quiet hours still show up here in the app.</div>
+    <label style="margin-top:14px">Shared daily search limits (everyone on this app)</label>
+    <div id="usageBox"></div>
     <label style="margin-top:14px">Muted sellers & dismissed listings</label>
     <div id="mutedBox"></div>
     <label style="margin-top:14px">Email alerts from Craigslist, OfferUp, Mercari, Facebook…</label>
@@ -568,8 +575,19 @@ $("#settingsBtn").onclick = () => {
   const f = $("#settingsForm"); f.ntfy_topic.value = state.me.ntfy_topic || ""; f.discord_webhook.value = state.me.discord_webhook || "";
   f.quiet_start.value = state.me.quiet_start || ""; f.quiet_end.value = state.me.quiet_end || "";
   f.quiet_allow_urgent.checked = state.me.quiet_allow_urgent !== false;
-  $("#settingsErr").textContent = ""; renderGmail(); renderMuted(); $("#settings").showModal();
+  $("#settingsErr").textContent = ""; renderGmail(); renderMuted(); renderUsage(); $("#settings").showModal();
 };
+async function renderUsage() {
+  const box = $("#usageBox"), rows = await api("/api/usage").catch(() => []);
+  if (!rows.length) { box.innerHTML = '<div class="hint">No limited sites are set up yet.</div>'; return; }
+  const n = v => Number(v).toLocaleString();
+  box.innerHTML = `<div class="usage">${rows.map(r => {
+    const pct = Math.min(100, Math.round(r.used_today / r.limit * 100));
+    const planPct = Math.round(r.planned_per_day / r.limit * 100);
+    return `<b>${esc(r.name)}</b><div class="bar" role="img" aria-label="${pct}% used today"><i class="${pct >= 80 ? "hot" : ""}" style="width:${pct}%"></i></div>
+      <div class="sub">${n(r.used_today)} of ${n(r.limit)} used today · all watches need ~${n(r.planned_per_day)}/day (${planPct}%)</div>`;
+  }).join("")}</div><div class="hint">Resets at midnight UTC. New watches that wouldn't fit are refused with a suggestion.</div>`;
+}
 async function renderMuted() {
   const box = $("#mutedBox"), list = await api("/api/hidden");
   if (!list.length) { box.innerHTML = '<div class="hint">None. Use 🔇 Mute seller or ✕ Not interested on any listing.</div>'; return; }

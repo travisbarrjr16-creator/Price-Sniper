@@ -40,6 +40,7 @@ def parse_results(data: dict) -> list[Listing]:
 class EtsySource(Source):
     key = "etsy"
     name = "Etsy"
+    default_daily_limit = 10000
 
     def __init__(self) -> None:
         self.api_key = os.getenv("ETSY_API_KEY", "")

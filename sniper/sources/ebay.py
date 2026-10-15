@@ -38,6 +38,7 @@ def _float(v) -> float | None:
 class EbaySource(Source):
     key = "ebay"
     name = "eBay"
+    default_daily_limit = 5000      # Browse API default for a new app; check your eBay developer dashboard
 
     def __init__(self) -> None:
         self.client_id = os.getenv("EBAY_CLIENT_ID", "")
@@ -47,6 +48,9 @@ class EbaySource(Source):
 
     def configured(self) -> bool:
         return bool(self.client_id and self.client_secret)
+
+    def calls_per_check(self, watch: Watch) -> int:
+        return 2 if (watch.zip_code and watch.radius_miles) else 1     # + local-pickup search
 
     async def _get_token(self, client: httpx.AsyncClient) -> str:
         if self._token and time.time() < self._token_expiry - 60:

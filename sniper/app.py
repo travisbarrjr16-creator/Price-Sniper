@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import maintenance, scoring
+from . import budget, maintenance, scoring
 from .alerts import valid_discord_webhook, valid_ntfy_topic
 from .db import DB
 from .models import CONDITIONS, User, Watch, utcnow
@@ -303,6 +303,8 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         _validate(body)
         if len(db.list_watches(user.id)) >= int(os.getenv("SNIPER_MAX_WATCHES", "25")):
             raise HTTPException(429, "watch limit reached; delete one first")
+        if why := budget.check_watch(db, Watch(**body.model_dump(), user_id=user.id), enabled_sources()):
+            raise HTTPException(429, why)
         w = db.create_watch(Watch(**body.model_dump(), user_id=user.id))
         if check_now:
             await watcher.check(w)
@@ -314,6 +316,8 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         w = _get(wid, user)
         for k, v in body.model_dump().items():
             setattr(w, k, v)
+        if why := budget.check_watch(db, w, enabled_sources()):
+            raise HTTPException(429, why)
         return db.update_watch(w).to_dict()
 
     @app.delete("/api/watches/{wid}")
@@ -383,6 +387,11 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
             out[b] = {"typical": med, "sample_size": n, "low": low, "high": high}
         return {"snapshots": db.snapshots(wid, since), "reference": out,
                 "lowest_seen": db.lowest_seen(wid, scoring.RISK_HIDE_THRESHOLD)}
+
+    @app.get("/api/usage")
+    def usage(user: User = Depends(current_user)):
+        """Shared daily limits per site: used today, and what everyone's watches need per day."""
+        return budget.report(db, enabled_sources())
 
     @app.get("/api/alerts")
     def alerts(since_id: int = 0, user: User = Depends(current_user)):

@@ -53,6 +53,7 @@ def parse_listings(data: dict) -> list[Listing]:
 class ReverbSource(Source):
     key = "reverb"
     name = "Reverb"
+    default_daily_limit = 10000     # conservative guess
 
     def __init__(self) -> None:
         self.token = os.getenv("REVERB_TOKEN", "")

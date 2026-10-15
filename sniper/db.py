@@ -82,6 +82,12 @@ CREATE TABLE IF NOT EXISTS password_resets (
     user_id INTEGER NOT NULL,
     expires_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS api_usage (
+    day TEXT NOT NULL,            -- UTC date, e.g. 2026-10-15
+    source TEXT NOT NULL,
+    calls INTEGER NOT NULL,
+    PRIMARY KEY (day, source)
+);
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -117,6 +123,20 @@ class DB:
     def _read_one(self, sql: str, params: tuple = ()) -> Optional[sqlite3.Row]:
         rows = self._read(sql, params)
         return rows[0] if rows else None
+
+    # --- shared API usage (all users share the server's marketplace keys) ----
+    def add_usage(self, source: str, calls: int) -> None:
+        if calls <= 0:
+            return
+        day = utcnow().date().isoformat()
+        with self.lock, self.conn:
+            self.conn.execute(
+                "INSERT INTO api_usage VALUES (?, ?, ?) ON CONFLICT(day, source) DO UPDATE SET calls = calls + excluded.calls",
+                (day, source, calls))
+
+    def usage_today(self, source: str) -> int:
+        r = self._read_one("SELECT calls FROM api_usage WHERE day=? AND source=?", (utcnow().date().isoformat(), source))
+        return r["calls"] if r else 0
 
     # --- app-wide settings (e.g. the maintenance notice) -------------------
     def get_setting(self, key: str) -> Optional[str]:

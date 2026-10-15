@@ -111,6 +111,7 @@ def parse_hws(post: dict, query: str) -> Listing | None:
 class RedditSource(Source):
     key = "reddit"
     name = "Reddit"
+    default_daily_limit = 50000     # Reddit limits per minute; this keeps the daily total modest
 
     def __init__(self) -> None:
         self.client_id = os.getenv("REDDIT_CLIENT_ID", "")
@@ -121,6 +122,9 @@ class RedditSource(Source):
 
     def configured(self) -> bool:
         return bool(self.client_id and self.client_secret)
+
+    def calls_per_check(self, watch: Watch) -> int:
+        return 2        # r/buildapcsales + r/hardwareswap
 
     async def _auth(self, client: httpx.AsyncClient) -> dict:
         if not self._token or time.time() > self._expiry - 60:

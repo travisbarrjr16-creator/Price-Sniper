@@ -1,5 +1,7 @@
 import asyncio
 
+import httpx
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -350,3 +352,64 @@ def test_history_has_typical_range(tmp_path, monkeypatch):
     used = ref["reference"]["used"]
     assert used["low"] <= used["typical"] <= used["high"]
     assert ref["lowest_seen"] is not None
+
+
+class LimitedSource(FakeSource):
+    """A source with a 300/day limit that really sends one HTTP request per check."""
+    key, name, default_daily_limit = "limited", "LimitedSite", 300
+
+    async def search(self, watch, client):
+        await client.get("https://limited.example/search")
+        return list(self.items)
+
+
+def test_daily_limit_planning_refuses_and_suggests_interval(tmp_path):
+    from sniper import budget
+    db = DB(str(tmp_path / "b.db"))
+    src = [LimitedSource()]
+    # 90% of 300 = 270 planned requests/day. A 15-minute watch needs 96/day.
+    for _ in range(2):
+        w = Watch(query="RTX 4060", interval_minutes=15)
+        assert budget.check_watch(db, w, src) is None
+        db.create_watch(w)
+    third = Watch(query="RTX 4070", interval_minutes=15)
+    msg = budget.check_watch(db, third, src)
+    assert msg and "every 20 minutes" in msg          # 192 used, 78 left -> 72/day at 20 min fits
+    assert budget.check_watch(db, Watch(query="RTX 4070", interval_minutes=20), src) is None
+    assert budget.check_watch(db, Watch(query="x", interval_minutes=15, active=False), src) is None  # paused = free
+
+
+def test_daily_limit_counts_requests_and_pauses_site(tmp_path, monkeypatch):
+    db = DB(str(tmp_path / "r.db"))
+    src = LimitedSource()
+    src.items = [L("RTX 4060 a", 250, shipping=0, condition="new")]
+    hits = []
+    transport = httpx.MockTransport(lambda req: hits.append(req.url.host) or httpx.Response(200))
+    watcher = Watcher(db, sources=[src], transport=transport)
+    w = db.create_watch(Watch(query="RTX 4060"))
+
+    asyncio.run(watcher.check(w))
+    assert db.usage_today("limited") == 1 and hits == ["limited.example"]
+
+    db.add_usage("limited", 294)          # 295 of 300 used: next check would pass 98%
+    stats = asyncio.run(watcher.check(db.get_watch(w.id)))
+    assert hits == ["limited.example"]    # no new request was sent
+    assert "paused for today" in stats["errors"][0] and "295 of 300" in stats["errors"][0]
+    assert db.get_watch(w.id).last_error.startswith("LimitedSite: paused for today")
+
+
+def test_limit_override_and_usage_api(tmp_path, monkeypatch):
+    s = LimitedSource()
+    monkeypatch.setenv("SNIPER_LIMIT_LIMITED", "1000")
+    assert s.daily_limit() == 1000
+    monkeypatch.setenv("SNIPER_LIMIT_LIMITED", "0")
+    assert s.daily_limit() is None                  # 0 = no limit
+    monkeypatch.setenv("SNIPER_LIMIT_DEMO", "300")      # plans for 270/day
+    c = _client(tmp_path, monkeypatch); _signup(c)
+    c.post("/api/watches", json={"query": "RTX 4060", "interval_minutes": 30})
+    (row,) = c.get("/api/usage").json()
+    assert (row["key"], row["limit"], row["planned_per_day"]) == ("demo", 300, 48)
+    # 48 + 288/day (every 5 min) > 270: refused, and told 15 minutes would fit (48 + 96)
+    r = c.post("/api/watches", json={"query": "RTX 4070", "interval_minutes": 5})
+    assert r.status_code == 429 and "every 15 minutes" in r.json()["detail"]
+    assert c.post("/api/watches", json={"query": "RTX 4070", "interval_minutes": 15}).status_code == 200
