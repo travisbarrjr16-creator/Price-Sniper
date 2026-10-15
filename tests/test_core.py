@@ -703,7 +703,8 @@ def test_sliding_session_and_watchlist_ignores_hidden(tmp_path, monkeypatch):
     db = c.app.state.db
     soon = (utcnow() + timedelta(days=2)).isoformat()
     db.conn.execute("UPDATE sessions SET expires_at=?", (soon,)); db.conn.commit()
-    assert c.get("/api/me").status_code == 200
+    r = c.get("/api/me")
+    assert r.status_code == 200 and "Max-Age=2592000" in r.headers["set-cookie"]     # browser cookie renewed too
     assert db.conn.execute("SELECT expires_at FROM sessions").fetchone()[0] > (utcnow() + timedelta(days=29)).isoformat()
 
     w = c.post("/api/watches", json={"query": "RTX 4060"}).json()

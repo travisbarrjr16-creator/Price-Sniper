@@ -204,9 +204,12 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
             raise HTTPException(401, "not signed in")
         return user
 
-    def _start_session(resp: Response, user: User) -> None:
-        resp.set_cookie(COOKIE, db.create_session(user.id), max_age=30 * 86400, httponly=True,
+    def _set_cookie(resp: Response, token: str) -> None:
+        resp.set_cookie(COOKIE, token, max_age=30 * 86400, httponly=True,
                         samesite="lax", secure=public_url().startswith("https://"))
+
+    def _start_session(resp: Response, user: User) -> None:
+        _set_cookie(resp, db.create_session(user.id))
 
     @app.post("/api/auth/signup")
     def signup(body: Credentials, response: Response):
@@ -247,7 +250,10 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         return {"ok": True}
 
     @app.get("/api/me")
-    def me(user: User = Depends(current_user)):
+    def me(request: Request, response: Response, user: User = Depends(current_user)):
+        # Opening the app renews the browser's cookie too (the server side slides in db.session_user),
+        # so people who use it at least monthly stay signed in.
+        _set_cookie(response, request.cookies[COOKIE])
         return {**user.public(), "gmail_available": bool(gmail_source and gmail_source.configured()),
                 "gmail_connected": db.gmail_connected(user.id),
                 "push_error": db.push_error(user.id),
