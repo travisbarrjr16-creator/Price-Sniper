@@ -113,6 +113,14 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .auth-card h1 { font-size: 20px; margin: 0 0 4px; }
 .auth-card .sub { color: var(--text-2); margin: 0 0 12px; }
 .theme-btn { white-space: nowrap; }
+.badge.target { background: var(--good-bg); color: var(--good); outline: 2px solid var(--good); }
+.badge.cheapest { background: var(--neutral-bg); color: var(--text); }
+.item .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.item .acts button { font-size: 12px; padding: 3px 8px; }
+.item.dismissed { opacity: .55; }
+.mutelist { list-style: none; padding: 0; margin: 4px 0 0; max-height: 160px; overflow: auto; }
+.mutelist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.mutelist button { font-size: 12px; padding: 2px 8px; }
 .auth-card .theme-btn { float: right; margin-top: -2px; }
 .linkbtn { background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; font: inherit; }
 .user { display: flex; gap: 8px; align-items: center; }
@@ -151,6 +159,14 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
         <button class="primary" type="submit" id="authBtn">Sign in</button>
         <button class="linkbtn" type="button" id="authToggle">Create an account</button>
       </div>
+      <div style="margin-top:10px"><button class="linkbtn" type="button" id="forgotBtn">Forgot password?</button></div>
+      <div class="hint" id="forgotHelp" hidden>Ask the person who runs this app for a reset link. It opens a page here where you choose a new password.</div>
+    </form>
+    <form id="resetForm" hidden>
+      <label>New password</label><input name="password" type="password" autocomplete="new-password" minlength="8" required>
+      <label>New password again</label><input name="password2" type="password" autocomplete="new-password" minlength="8" required>
+      <div class="err" id="resetErr" style="margin-top:8px"></div>
+      <div style="margin-top:12px"><button class="primary" type="submit">Set new password</button></div>
     </form>
   </div>
 </div>
@@ -170,6 +186,15 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
     <div class="hint">Install the ntfy app, subscribe to a hard-to-guess topic, enter it here.</div>
     <label>Discord webhook (optional)</label>
     <input name="discord_webhook" placeholder="https://discord.com/api/webhooks/...">
+    <label style="margin-top:14px">Quiet hours (no phone buzzing)</label>
+    <div class="row">
+      <div><input name="quiet_start" type="time" aria-label="Quiet from"></div>
+      <div><input name="quiet_end" type="time" aria-label="Quiet until"></div>
+    </div>
+    <div class="checks" style="margin-top:6px"><label><input type="checkbox" name="quiet_allow_urgent" checked> Still buzz for 🎯 target hits, 🔥 new lows and great deals</label></div>
+    <div class="hint">Leave both blank for no quiet hours. Alerts during quiet hours still show up here in the app.</div>
+    <label style="margin-top:14px">Muted sellers & dismissed listings</label>
+    <div id="mutedBox"></div>
     <label style="margin-top:14px">Email alerts from Craigslist, OfferUp, Mercari, Facebook…</label>
     <div id="gmailBox"></div>
     <div class="err" id="settingsErr" style="margin-top:8px"></div>
@@ -189,8 +214,9 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
         <input name="query" placeholder="RTX 4060" required>
         <div class="row">
           <div><label>Max total $</label><input name="max_price" type="number" step="1" placeholder="290"></div>
-          <div><label>Check every (min)</label><input name="interval_minutes" type="number" value="15" min="1"></div>
+          <div><label title="Urgent alert when a listing hits this price">🎯 Target $</label><input name="target_price" type="number" step="1" placeholder="250"></div>
         </div>
+        <label>Check every (min)</label><input name="interval_minutes" type="number" value="15" min="5">
         <label>Condition</label>
         <div class="checks" id="conds"></div>
         <label>Sites</label>
@@ -230,9 +256,10 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money = v => v == null ? "—" : "$" + Number(v).toFixed(2);
+const dollars = v => v == null ? "—" : "$" + Math.round(v);
 const COND = {new: "New", open_box: "Open box", refurbished: "Refurb", used: "Used", parts: "For parts"};
 const DEAL = {great: "Great deal", good: "Good price", fair: "Typical price", high: "Above typical", suspicious: "Too good to be true"};
-let state = {watches: [], sel: null, sort: "total", showHidden: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
+let state = {watches: [], sel: null, sort: "total", showHidden: false, showMine: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
 try { state.sort = localStorage.getItem("sort") || "total"; } catch {}
 
 const api = async (path, opts = {}) => {
@@ -250,7 +277,7 @@ $("#f").addEventListener("submit", async e => {
   const f = new FormData(e.target), list = s => (s || "").split(",").map(x => x.trim()).filter(Boolean);
   const num = k => f.get(k) ? Number(f.get(k)) : null;
   const body = {
-    query: f.get("query").trim(), max_price: num("max_price"), interval_minutes: num("interval_minutes") || 15,
+    query: f.get("query").trim(), max_price: num("max_price"), target_price: num("target_price"), interval_minutes: num("interval_minutes") || 15,
     zip_code: f.get("zip_code") || null, radius_miles: num("radius_miles"),
     conditions: [...document.querySelectorAll("#conds input:checked")].map(i => i.value),
     required_terms: list(f.get("required_terms")), excluded_terms: list(f.get("excluded_terms")),
@@ -292,12 +319,12 @@ async function renderMain() {
   const w = state.watches.find(x => x.id === state.sel);
   if (!w) return;
   const [res, hist] = await Promise.all([
-    api(`/api/watches/${w.id}/listings?sort=${state.sort}&include_hidden=${state.showHidden}&site=${encodeURIComponent(state.site)}`),
+    api(`/api/watches/${w.id}/listings?sort=${state.sort}&include_hidden=${state.showHidden}&include_dismissed=${state.showMine}&site=${encodeURIComponent(state.site)}`),
     api(`/api/watches/${w.id}/history`),
   ]);
   const items = res.items, siteCounts = res.sites;
   if (state.site && !(state.site in siteCounts)) siteCounts[state.site] = 0;
-  const visible = items.filter(i => !i.hidden);
+  const visible = items.filter(i => !i.hidden && !i.dismissed && !i.muted);
   const best = visible.reduce((a, b) => (!a || b.total_cost < a.total_cost ? b : a), null);
   const st = w.stats;
   const rej = st ? Object.entries(st.rejected).map(([k, v]) => `${v} ${k}`).join(", ") : "";
@@ -311,15 +338,18 @@ async function renderMain() {
           ${w.last_error ? `<div class="err">${esc(w.last_error)}</div>` : ""}</div>
         <div class="toolbar">
           <button id="chk">Check now</button>
+          <button id="dup" title="Copy these settings into the New watch form">Duplicate</button>
           <button id="pause">${w.active ? "Pause" : "Resume"}</button>
           <button id="del">Delete</button>
         </div>
       </div>
       <div class="tiles" style="margin-top:12px">
         <div class="tile"><div class="k">Lowest total${state.site ? " · " + esc(state.site) : ""}</div><div class="v">${money(best?.total_cost)}</div><div class="s">${best ? esc(best.source) + " · " + COND[best.condition] : "no matches"}</div></div>
-        <div class="tile"><div class="k">Typical new</div><div class="v">${money(ref.new.typical)}</div><div class="s">${ref.new.sample_size} listings, 30 days</div></div>
-        <div class="tile"><div class="k">Typical used</div><div class="v">${money(ref.used.typical)}</div><div class="s">${ref.used.sample_size} listings, 30 days</div></div>
-        <div class="tile"><div class="k">Your max</div><div class="v">${w.max_price ? "$" + w.max_price : "—"}</div><div class="s">${visible.filter(i => w.max_price && i.total_cost <= w.max_price).length} under it now</div></div>
+        ${["new", "used"].map(b => `<div class="tile"><div class="k">Typical ${b}</div><div class="v">${money(ref[b].typical)}</div>
+          <div class="s">${ref[b].low != null ? `range ${dollars(ref[b].low)}–${dollars(ref[b].high)} · ` : ""}${ref[b].sample_size} listings, 30 days</div></div>`).join("")}
+        <div class="tile"><div class="k">Your max${w.target_price ? " / 🎯 target" : ""}</div><div class="v">${w.max_price ? "$" + w.max_price : "—"}${w.target_price ? ` / $${w.target_price}` : ""}</div>
+          <div class="s">${visible.filter(i => w.max_price && i.total_cost <= w.max_price).length} under max${w.target_price ? ` · ${visible.filter(i => i.target_hit).length} at target` : ""}</div></div>
+        <div class="tile"><div class="k">Lowest you've seen</div><div class="v">${money(hist.lowest_seen)}</div><div class="s">since this watch started</div></div>
       </div>
     </div>
     <div class="card"><h2>Lowest price over time</h2><div id="chart"></div></div>
@@ -332,6 +362,7 @@ async function renderMain() {
           ${Object.entries(siteCounts).map(([k, n]) => `<option value="${esc(k)}" ${state.site === k ? "selected" : ""}>${esc(k)} (${n})</option>`).join("")}
         </select>
         <label class="checks" style="margin:0"><label><input type="checkbox" id="sh" ${state.showHidden ? "checked" : ""}> Show hidden scams</label></label>
+        ${res.hidden_by_you ? `<label class="checks" style="margin:0"><label><input type="checkbox" id="sm" ${state.showMine ? "checked" : ""}> Show ${res.hidden_by_you} you hid</label></label>` : ""}
         <span class="filtered">${st ? `${st.fetched} fetched → ${st.matched} matched${rej ? ` (filtered: ${esc(rej)})` : ""}${st.hidden_risky ? `, ${st.hidden_risky} flagged risky` : ""}` : ""}</span>
       </div>
       <div class="list">${items.length ? items.map(itemHTML).join("") : `<div class="empty">${state.site ? `Nothing from ${esc(state.site)} right now.` : "No matching listings right now. The watch keeps checking."}</div>`}</div>
@@ -342,23 +373,66 @@ async function renderMain() {
   $("#del").onclick = async () => { if (confirm(`Stop watching "${w.query}"?`)) { await api(`/api/watches/${w.id}`, {method: "DELETE"}); state.sel = null; refresh(); } };
   $("#sort").querySelectorAll("button").forEach(b => b.onclick = () => { state.sort = b.dataset.k; try { localStorage.setItem("sort", state.sort); } catch {} renderMain(); });
   $("#sh").onchange = e => { state.showHidden = e.target.checked; renderMain(); };
+  if ($("#sm")) $("#sm").onchange = e => { state.showMine = e.target.checked; renderMain(); };
+  $("#dup").onclick = () => duplicateWatch(w);
+  document.querySelectorAll("[data-hide]").forEach(b => b.onclick = async () => {
+    const {hide, value, label} = b.dataset;
+    const undo = b.dataset.undo === "1";
+    await api(undo ? `/api/hidden?kind=${hide}&value=${encodeURIComponent(value)}` : "/api/hidden",
+      undo ? {method: "DELETE"} : {method: "POST", body: JSON.stringify({kind: hide, value, label})});
+    if (!undo) toast(`${hide === "seller" ? "Muted " + esc(label) : "Hidden: " + esc(label)}`, () =>
+      api(`/api/hidden?kind=${hide}&value=${encodeURIComponent(value)}`, {method: "DELETE"}).then(renderMain));
+    renderMain();
+  });
   $("#site").onchange = e => { state.site = e.target.value; renderMain(); };
   drawChart(hist.snapshots);
+}
+
+function duplicateWatch(w) {
+  const f = $("#f");
+  for (const k of ["query", "max_price", "target_price", "interval_minutes", "zip_code", "radius_miles"]) f[k].value = w[k] ?? "";
+  f.required_terms.value = w.required_terms.join(", "); f.excluded_terms.value = w.excluded_terms.join(", ");
+  f.tax_rate.value = w.tax_rate ? +(w.tax_rate * 100).toFixed(3) : "";
+  f.strict_variants.checked = w.strict_variants; f.hide_risky.checked = w.hide_risky; f.include_auctions.checked = w.include_auctions;
+  document.querySelectorAll("#conds input").forEach(i => i.checked = w.conditions.includes(i.value));
+  document.querySelectorAll("#srcs input").forEach(i => i.checked = !w.sources.length || w.sources.includes(i.value));
+  f.querySelector("details").open = true;
+  f.scrollIntoView({behavior: "smooth", block: "start"});
+  f.query.focus(); f.query.select();
+  toast("Settings copied. Change the item name, then Start watching.");
+}
+
+function toast(html, undo) {
+  const t = document.createElement("div"); t.className = "toast";
+  t.innerHTML = html + (undo ? ' <button class="linkbtn" type="button">Undo</button>' : "");
+  if (undo) t.querySelector("button").onclick = () => { undo(); t.remove(); };
+  $("#toasts").append(t); setTimeout(() => t.remove(), 6000);
 }
 
 function itemHTML(i) {
   const ship = i.local_pickup ? "local pickup" : i.shipping_estimated ? "+ship est." : i.shipping ? `+${money(i.shipping)} ship` : "free ship";
   const deal = i.deal ? `<span class="badge ${i.deal.label}" title="Typical: ${money(i.deal.median)} (${i.deal.n} listings)">${DEAL[i.deal.label]} ${i.deal.pct_vs_median > 0 ? "+" : ""}${Math.round(i.deal.pct_vs_median)}%</span>` : "";
   const seller = i.seller_name ? `${esc(i.seller_name)}${i.seller_rating != null ? ` ${i.seller_rating}%` : ""}${i.seller_feedback_count != null ? ` (${i.seller_feedback_count})` : ""}` : "";
-  const risk = i.risk_flags.length ? `<span class="badge risk" title="${esc(i.risk_flags.join("; "))}">⚠ ${esc(i.risk_flags[0])}${i.risk_flags.length > 1 ? ` +${i.risk_flags.length - 1}` : ""}</span>` : "";
-  return `<div class="item ${i.hidden ? "hidden" : ""}">
+  const risk = i.risk_flags.map(f => `<span class="badge risk">⚠ ${esc(f)}</span>`).join("");
+  const target = i.target_hit ? '<span class="badge target">🎯 Target hit</span>' : "";
+  const live = !(i.hidden || i.dismissed || i.muted);
+  const rank = live ? (i.cheaper_now === 0 ? '<span class="badge cheapest">🥇 Cheapest right now</span>'
+    : `<span class="badge cheapest">${i.cheaper_now} cheaper right now</span>`) : "";
+  const muteBtn = i.seller_key ? (i.muted
+      ? `<button data-hide="seller" data-undo="1" data-value="${esc(i.seller_key)}">Unmute seller</button>`
+      : `<button data-hide="seller" data-value="${esc(i.seller_key)}" data-label="${esc(i.seller_name)} (${esc(i.site)})" title="Never show this seller again">🔇 Mute seller</button>`) : "";
+  const dismissBtn = i.dismissed
+      ? `<button data-hide="listing" data-undo="1" data-value="${esc(i.key)}">Show again</button>`
+      : `<button data-hide="listing" data-value="${esc(i.key)}" data-label="${esc(i.title.slice(0, 60))}" title="Hide this listing">✕ Not interested</button>`;
+  return `<div class="item ${i.hidden ? "hidden" : ""} ${i.dismissed || i.muted ? "dismissed" : ""}">
     ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : '<div class="ph"></div>'}
     <div>
       <div class="t">${esc(i.title)}</div>
       <div class="m"><span><b>${esc(i.source)}</b></span><span>${COND[i.condition] || i.condition}</span>
         ${i.local_pickup && i.distance_miles != null ? `<span>📍 ${i.distance_miles} mi${i.location ? " · " + esc(i.location) : ""}</span>` : ""}
         ${seller ? `<span>${seller}</span>` : ""}</div>
-      <div class="m" style="margin-top:4px">${deal}${risk}</div>
+      <div class="m" style="margin-top:4px">${target}${deal}${rank}${risk}</div>
+      <div class="acts">${dismissBtn}${muteBtn}</div>
     </div>
     <div class="price">
       <div><div class="total">${money(i.total_cost)}</div>
@@ -446,6 +520,22 @@ function setAuthMode(up) {
   $("#authErr").textContent = "";
 }
 $("#authToggle").onclick = () => setAuthMode(!signingUp);
+$("#forgotBtn").onclick = () => $("#forgotHelp").hidden = !$("#forgotHelp").hidden;
+const resetToken = (location.hash.match(/^#reset=([\w-]+)$/) || [])[1];
+if (resetToken) {
+  history.replaceState(null, "", "/");
+  $("#authForm").hidden = true; $("#resetForm").hidden = false;
+  $("#authSub").textContent = "Choose a new password. You'll be signed out on your other devices.";
+}
+$("#resetForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = e.target;
+  if (f.password.value !== f.password2.value) { $("#resetErr").textContent = "The passwords don't match."; return; }
+  try {
+    await api("/api/auth/reset", {method: "POST", body: JSON.stringify({token: resetToken, password: f.password.value})});
+    f.hidden = true; $("#authForm").hidden = false; boot();
+  } catch (err) { $("#resetErr").textContent = err.message; }
+});
 $("#authForm").addEventListener("submit", async e => {
   e.preventDefault();
   const f = new FormData(e.target);
@@ -476,14 +566,29 @@ function renderGmail() {
 }
 $("#settingsBtn").onclick = () => {
   const f = $("#settingsForm"); f.ntfy_topic.value = state.me.ntfy_topic || ""; f.discord_webhook.value = state.me.discord_webhook || "";
-  $("#settingsErr").textContent = ""; renderGmail(); $("#settings").showModal();
+  f.quiet_start.value = state.me.quiet_start || ""; f.quiet_end.value = state.me.quiet_end || "";
+  f.quiet_allow_urgent.checked = state.me.quiet_allow_urgent !== false;
+  $("#settingsErr").textContent = ""; renderGmail(); renderMuted(); $("#settings").showModal();
 };
+async function renderMuted() {
+  const box = $("#mutedBox"), list = await api("/api/hidden");
+  if (!list.length) { box.innerHTML = '<div class="hint">None. Use 🔇 Mute seller or ✕ Not interested on any listing.</div>'; return; }
+  box.innerHTML = `<ul class="mutelist">${list.map(h => `<li><span>${h.kind === "seller" ? "🔇" : "✕"} ${esc(h.label || h.value)}</span>
+    <button type="button" data-kind="${h.kind}" data-value="${esc(h.value)}">${h.kind === "seller" ? "Unmute" : "Show again"}</button></li>`).join("")}</ul>`;
+  box.querySelectorAll("button").forEach(b => b.onclick = async () => {
+    await api(`/api/hidden?kind=${b.dataset.kind}&value=${encodeURIComponent(b.dataset.value)}`, {method: "DELETE"});
+    renderMuted(); if (state.sel) renderMain();
+  });
+}
 $("#settingsClose").onclick = () => $("#settings").close();
 $("#settingsForm").addEventListener("submit", async e => {
   e.preventDefault();
   const f = e.target;
   try {
     state.me = {...state.me, ...await api("/api/me", {method: "PUT", body: JSON.stringify({ntfy_topic: f.ntfy_topic.value, discord_webhook: f.discord_webhook.value})})};
+    state.me = {...state.me, ...await api("/api/me/quiet", {method: "PUT", body: JSON.stringify({
+      start: f.quiet_start.value || null, end: f.quiet_end.value || null,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone, allow_urgent: f.quiet_allow_urgent.checked})})};
     $("#settings").close(); loadStatus();
   } catch (err) { $("#settingsErr").textContent = err.message; }
 });
@@ -559,8 +664,8 @@ function renderNotice() {
 setInterval(renderNotice, 1000);
 checkNotice();
 
-setAuthMode(false);
-boot();
+if (!resetToken) setAuthMode(false);
+if (resetToken) showAuth(); else boot();
 </script>
 </body>
 </html>

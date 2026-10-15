@@ -14,7 +14,7 @@ from .alerts import Notifier
 from .db import DB
 from .matching import match
 from .models import Listing, ScoredListing, Watch, utcnow
-from .sources import Source, enabled_sources
+from .sources import Source, enabled_sources, seller_key
 
 log = logging.getLogger("sniper.watcher")
 
@@ -125,11 +125,16 @@ class Watcher:
             scored = [scoring.score(l, watch, medians) for l in matched.values()]
             visible = [s for s in scored if not (watch.hide_risky and s.risk_score >= scoring.RISK_HIDE_THRESHOLD)]
 
+            # The user's muted sellers and "not interested" listings never alert.
+            muted, dismissed = self.db.hidden_sets(watch.user_id)
+            alertable = [s for s in visible if s.listing.key not in dismissed
+                         and seller_key(s.listing.source, s.listing.seller_name) not in muted]
+
             # Alerts — computed against state *before* this run is saved
             prev_active = [r for r in existing.values() if r["active"] and r["risk"] < scoring.RISK_HIDE_THRESHOLD]
             prev_lowest = min((r["total"] for r in prev_active), default=None)
             first_run = not existing
-            alerts = self._pick_alerts(watch, visible, existing, prev_lowest, first_run)
+            alerts = self._pick_alerts(watch, alertable, existing, prev_lowest, first_run)
 
             ts = now.isoformat()
             for s in scored:
@@ -145,8 +150,8 @@ class Watcher:
                     med, n = scoring.median_of(totals)
                     self.db.add_snapshot(watch.id, ts, bucket, min(totals), med, n)
 
-            for s, reason in alerts:
-                await self._send_alert(client, watch, s, reason)
+            for s, reason, urgent in alerts:
+                await self._send_alert(client, watch, s, reason, urgent)
 
         watch.last_checked_at = ts
         watch.last_error = "; ".join(errors) or None
@@ -165,15 +170,21 @@ class Watcher:
         self.last_stats[watch.id] = stats
         return stats
 
-    def _pick_alerts(self, watch, visible, existing, prev_lowest, first_run) -> list[tuple[ScoredListing, str]]:
+    def _pick_alerts(self, watch, visible, existing, prev_lowest, first_run) -> list[tuple[ScoredListing, str, bool]]:
+        """Returns (listing, reason, urgent). Kinds, most important first:
+        🎯 target hit (urgent) · 🔥 new lowest (urgent) · ⬇ price drop under max · 🆕 new under max."""
         if not visible:
             return []
         under = [s for s in visible if watch.max_price and s.total_cost <= watch.max_price]
+        on_target = [s for s in visible if watch.target_price and s.total_cost <= watch.target_price]
         if first_run:
             # Don't spam on the first scan: one summary alert for the cheapest hit.
+            if on_target:
+                best = min(on_target, key=lambda s: s.total_cost)
+                return [(best, f"🎯 {len(on_target)} listing(s) already at your ${watch.target_price:.0f} target", True)]
             if under:
                 best = min(under, key=lambda s: s.total_cost)
-                return [(best, f"{len(under)} listing(s) already under ${watch.max_price:.0f}")]
+                return [(best, f"🆕 {len(under)} listing(s) already under your ${watch.max_price:.0f} max", False)]
             return []
 
         out = []
@@ -185,14 +196,20 @@ class Watcher:
             if not (is_new or dropped):
                 continue
             beats = prev_lowest is not None and s.total_cost < prev_lowest
-            if beats:
-                out.append((s, f"new lowest price (was ${prev_lowest:.2f})"))
-                prev_lowest = s.total_cost
+            great = bool(s.deal and s.deal["label"] == "great")
+            if s in on_target:
+                out.append((s, f"🎯 hit your ${watch.target_price:.0f} target", True))
+            elif beats:
+                out.append((s, f"🔥 new lowest price (was ${prev_lowest:.2f})", True))
             elif s in under and (is_new or (alerted is None or s.total_cost < alerted - 1)):
-                out.append((s, "new listing under your max" if is_new else "price drop under your max"))
+                out.append((s, "🆕 new listing under your max" if is_new else "⬇ price drop under your max", great))
+            else:
+                continue
+            if beats:
+                prev_lowest = s.total_cost
         return out[:5]
 
-    async def _send_alert(self, client, watch: Watch, s: ScoredListing, reason: str) -> None:
+    async def _send_alert(self, client, watch: Watch, s: ScoredListing, reason: str, urgent: bool = False) -> None:
         l = s.listing
         where = f"{l.distance_miles:g} mi away" if l.local_pickup and l.distance_miles is not None else l.source
         deal = f" · {s.deal['pct_vs_median']:+.0f}% vs typical" if s.deal else ""
@@ -201,8 +218,11 @@ class Watcher:
         self.db.add_alert(watch.id, l.key, reason, l.title, s.total_cost, l.url)
         self.db.set_alerted(watch.id, l.key, s.total_cost)
         user = self.db.get_user(watch.user_id) if watch.user_id else None
+        if user and user.in_quiet_hours(utcnow()) and not (urgent and user.quiet_allow_urgent):
+            log.info("quiet hours for user %s: alert kept in app, no push", user.id)
+            return
         await self.notifier.send(
-            client, title, msg, l.url, urgent=bool(s.deal and s.deal["label"] == "great"),
+            client, title, msg, l.url, urgent=urgent,
             ntfy_topic=user.ntfy_topic if user else None,
             discord_webhook=user.discord_webhook if user else None,
         )

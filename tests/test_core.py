@@ -251,3 +251,102 @@ def test_db_safe_under_concurrent_requests(tmp_path, monkeypatch):
     with ThreadPoolExecutor(8) as ex:
         list(ex.map(work, range(8)))
     assert len(db.get_listing_rows(w.id)) == 320
+
+
+def test_target_price_and_urgent_alerts(tmp_path):
+    db = DB(str(tmp_path / "t.db"))
+    src = FakeSource()
+    src.items = [L("RTX 4060 a", 300, shipping=0, condition="new"), L("RTX 4060 b", 310, shipping=0, condition="new")]
+    w = db.create_watch(Watch(query="RTX 4060", max_price=290, target_price=260))
+    sent = []
+
+    class Rec:
+        async def send(self, client, title, msg, url, urgent=False, **kw):
+            sent.append((msg.splitlines()[0], urgent))
+
+    watcher = Watcher(db, notifier=Rec(), sources=[src])
+    asyncio.run(watcher.check(w))
+    src.items.append(L("RTX 4060 c", 285, shipping=0, condition="new", source_id="c"))     # new lowest
+    asyncio.run(watcher.check(db.get_watch(w.id)))
+    src.items.append(L("RTX 4060 d", 255, shipping=0, condition="new", source_id="d"))     # target hit
+    asyncio.run(watcher.check(db.get_watch(w.id)))
+    assert sent == [("🔥 new lowest price (was $300.00)", True), ("🎯 hit your $260 target", True)]
+
+
+def test_muted_seller_and_dismissed_listing(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    _signup(c)
+    wid = c.post("/api/watches", json={"query": "RTX 4060"}).json()["id"]
+    items = c.get(f"/api/watches/{wid}/listings").json()["items"]
+    seller = next(i for i in items if i["seller_key"])
+    n_from_seller = sum(1 for i in items if i["seller_key"] == seller["seller_key"])
+    other = next(i for i in items if i["seller_key"] != seller["seller_key"])
+
+    c.post("/api/hidden", json={"kind": "seller", "value": seller["seller_key"], "label": "x"})
+    c.post("/api/hidden", json={"kind": "listing", "value": other["key"], "label": "y"})
+    res = c.get(f"/api/watches/{wid}/listings").json()
+    assert all(i["seller_key"] != seller["seller_key"] and i["key"] != other["key"] for i in res["items"])
+    assert res["hidden_by_you"] == n_from_seller + 1
+    both = c.get(f"/api/watches/{wid}/listings?include_dismissed=true").json()["items"]
+    assert len(both) == len(res["items"]) + n_from_seller + 1
+
+    # "cheaper right now" ignores hidden ones; the cheapest real option says 0
+    assert min(i["cheaper_now"] for i in res["items"]) == 0
+    c.delete("/api/hidden", params={"kind": "listing", "value": other["key"]})
+    assert len(c.get("/api/hidden").json()) == 1
+
+    # someone else's mutes don't affect me
+    d = TestClient(c.app); _signup(d, "b@example.com")
+    assert d.get("/api/hidden").json() == []
+
+
+def test_muted_seller_never_alerts(tmp_path):
+    db = DB(str(tmp_path / "m.db"))
+    u = db.create_user("a@example.com", "hunter2hunter2")
+    src = FakeSource()
+    src.items = [L("RTX 4060 a", 300, shipping=0, condition="new", seller_name="Spammy")]
+    w = db.create_watch(Watch(query="RTX 4060", max_price=290, user_id=u.id))
+    watcher = Watcher(db, sources=[src])
+    asyncio.run(watcher.check(w))
+    db.hide(u.id, "seller", "Test:spammy", "Spammy")
+    src.items.append(L("RTX 4060 b", 200, shipping=0, condition="new", seller_name="Spammy", source_id="b"))
+    asyncio.run(watcher.check(db.get_watch(w.id)))
+    assert db.list_alerts() == []
+
+
+def test_quiet_hours(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from sniper.models import User
+    u = User(id=1, email="x", quiet_start="23:00", quiet_end="07:00", quiet_tz="America/Chicago")
+    assert u.in_quiet_hours(datetime(2026, 1, 1, 6, 0, tzinfo=timezone.utc))      # midnight in Chicago
+    assert not u.in_quiet_hours(datetime(2026, 1, 1, 18, 0, tzinfo=timezone.utc))  # noon in Chicago
+
+    c = _client(tmp_path, monkeypatch); _signup(c)
+    assert c.put("/api/me/quiet", json={"start": "23:00"}).status_code == 422
+    assert c.put("/api/me/quiet", json={"start": "25:00", "end": "07:00"}).status_code == 422
+    assert c.put("/api/me/quiet", json={"start": "23:00", "end": "07:00", "tz": "Mars/Base"}).status_code == 422
+    me = c.put("/api/me/quiet", json={"start": "23:00", "end": "07:00", "tz": "America/Chicago",
+                                      "allow_urgent": False}).json()
+    assert (me["quiet_start"], me["quiet_allow_urgent"]) == ("23:00", False)
+
+
+def test_password_reset_link(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch); _signup(c, "a@example.com")
+    db = c.app.state.db
+    uid = db.find_user_by_email("a@example.com").id
+    token = db.create_reset_token(uid)
+    assert c.post("/api/auth/reset", json={"token": "x" * 20, "password": "newpassword1"}).status_code == 400
+    assert c.post("/api/auth/reset", json={"token": token, "password": "newpassword1"}).status_code == 200
+    assert c.post("/api/auth/reset", json={"token": token, "password": "another-one1"}).status_code == 400  # one use
+    other = TestClient(c.app)
+    assert other.post("/api/auth/login", json={"email": "a@example.com", "password": "hunter2hunter2"}).status_code == 401
+    assert other.post("/api/auth/login", json={"email": "a@example.com", "password": "newpassword1"}).status_code == 200
+
+
+def test_history_has_typical_range(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch); _signup(c)
+    wid = c.post("/api/watches", json={"query": "RTX 4060"}).json()["id"]
+    ref = c.get(f"/api/watches/{wid}/history").json()
+    used = ref["reference"]["used"]
+    assert used["low"] <= used["typical"] <= used["high"]
+    assert ref["lowest_seen"] is not None

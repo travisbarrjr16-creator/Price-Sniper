@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import statistics
 import os
 import secrets
 import time
@@ -21,7 +23,7 @@ from . import maintenance, scoring
 from .alerts import valid_discord_webhook, valid_ntfy_topic
 from .db import DB
 from .models import CONDITIONS, User, Watch, utcnow
-from .sources import ALL_SOURCES, enabled_sources, get_source, site_of
+from .sources import ALL_SOURCES, enabled_sources, get_source, seller_key, site_of
 from .sources import gmail
 from .watcher import HISTORY_DAYS, Watcher
 
@@ -33,6 +35,7 @@ COOKIE = "sniper_session"
 class WatchIn(BaseModel):
     query: str = Field(min_length=2, max_length=120)
     max_price: Optional[float] = None
+    target_price: Optional[float] = None
     conditions: list[str] = ["new", "open_box", "refurbished", "used"]
     zip_code: Optional[str] = Field(None, max_length=10)
     radius_miles: Optional[int] = None
@@ -56,6 +59,24 @@ class Credentials(BaseModel):
 class NoticeIn(BaseModel):
     seconds: int = Field(60, ge=10, le=3600)
     message: Optional[str] = Field(None, max_length=300)
+
+
+class QuietIn(BaseModel):
+    start: Optional[str] = None      # "23:00", or null to turn quiet hours off
+    end: Optional[str] = None
+    tz: Optional[str] = Field(None, max_length=64)
+    allow_urgent: bool = True
+
+
+class HideIn(BaseModel):
+    kind: str                        # "seller" or "listing"
+    value: str = Field(min_length=1, max_length=300)
+    label: Optional[str] = Field(None, max_length=200)
+
+
+class ResetIn(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+    password: str = Field(min_length=8, max_length=200)
 
 
 class SettingsIn(BaseModel):
@@ -170,6 +191,45 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
             raise HTTPException(422, "Discord webhook must be a https://discord.com/api/webhooks/... URL")
         return db.update_user_settings(user.id, topic, hook).public()
 
+    @app.put("/api/me/quiet")
+    def update_quiet(body: QuietIn, user: User = Depends(current_user)):
+        hhmm = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+        start, end = (body.start or None), (body.end or None)
+        if bool(start) != bool(end) or (start and not (hhmm.match(start) and hhmm.match(end))):
+            raise HTTPException(422, "quiet hours need a start and end like 23:00 and 07:00")
+        if body.tz:
+            from zoneinfo import ZoneInfo
+            try:
+                ZoneInfo(body.tz)
+            except Exception:
+                raise HTTPException(422, "unknown time zone")
+        return db.update_quiet_hours(user.id, start, end, body.tz, body.allow_urgent).public()
+
+    @app.post("/api/auth/reset")
+    def reset_password(body: ResetIn, response: Response):
+        user = db.use_reset_token(body.token, body.password)
+        if not user:
+            raise HTTPException(400, "this reset link is invalid or expired; ask for a new one")
+        _start_session(response, user)
+        return user.public()
+
+    # --- muted sellers & "not interested" --------------------------------------
+    @app.get("/api/hidden")
+    def list_hidden(user: User = Depends(current_user)):
+        return db.list_hidden(user.id)
+
+    @app.post("/api/hidden")
+    def hide(body: HideIn, user: User = Depends(current_user)):
+        if body.kind not in ("seller", "listing"):
+            raise HTTPException(422, "kind must be seller or listing")
+        db.hide(user.id, body.kind, body.value, body.label)
+        return {"ok": True}
+
+    @app.delete("/api/hidden")
+    def unhide(kind: str, value: str, user: User = Depends(current_user)):
+        db.unhide(user.id, kind, value)
+        return {"ok": True}
+
     @app.get("/api/auth/config")
     def auth_config():
         return {"invite_required": bool(os.getenv("SNIPER_INVITE_CODE"))}
@@ -267,21 +327,36 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         return await watcher.check(_get(wid, user))
 
     @app.get("/api/watches/{wid}/listings")
-    def listings(wid: int, sort: str = "total", include_hidden: bool = False, site: str = "",
-                 user: User = Depends(current_user)):
+    def listings(wid: int, sort: str = "total", include_hidden: bool = False, include_dismissed: bool = False,
+                 site: str = "", user: User = Depends(current_user)):
         w = _get(wid, user)
-        items, sites = [], defaultdict(int)
+        muted, dismissed = db.hidden_sets(user.id)
+        shown, sites = [], defaultdict(int)
+        hidden_by_you = 0
         for r in db.get_listing_rows(wid):
             d = json.loads(r["data"])
             d["site"] = site_of(d["source"])
+            d["seller_key"] = seller_key(d["source"], d.get("seller_name"))
             d["first_seen"], d["first_total"] = r["first_seen"], r["first_price"]
             d["hidden"] = w.hide_risky and r["risk"] >= scoring.RISK_HIDE_THRESHOLD
+            d["dismissed"] = d["key"] in dismissed
+            d["muted"] = d["seller_key"] in muted
+            d["target_hit"] = bool(w.target_price and d["total_cost"] <= w.target_price)
             if d["hidden"] and not include_hidden:
                 continue
+            if d["dismissed"] or d["muted"]:
+                hidden_by_you += 1
+                if not include_dismissed:
+                    continue
+            shown.append(d)
+        # "N cheaper right now" counts every real option, on every site
+        live = sorted(d["total_cost"] for d in shown if not (d["hidden"] or d["dismissed"] or d["muted"]))
+        items = []
+        for d in shown:
+            d["cheaper_now"] = sum(1 for t in live if t < d["total_cost"])
             sites[d["site"]] += 1
-            if site and d["site"] != site:
-                continue
-            items.append(d)
+            if not site or d["site"] == site:
+                items.append(d)
         keyfn = {
             "total": lambda d: d["total_cost"],
             "value": lambda d: d["effective_cost"],
@@ -291,7 +366,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         if not keyfn:
             raise HTTPException(422, "sort must be total|value|distance|newest")
         items.sort(key=keyfn, reverse=(sort == "newest"))
-        return {"items": items, "sites": dict(sorted(sites.items()))}
+        return {"items": items, "sites": dict(sorted(sites.items())), "hidden_by_you": hidden_by_you}
 
     @app.get("/api/watches/{wid}/history")
     def history(wid: int, days: int = HISTORY_DAYS, user: User = Depends(current_user)):
@@ -299,9 +374,15 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         since = (utcnow() - timedelta(days=days)).isoformat()
         out = {}
         for b in ("new", "used"):
-            med, n = scoring.median_of(db.reference_totals(wid, b, since, scoring.RISK_HIDE_THRESHOLD))
-            out[b] = {"typical": med, "sample_size": n}
-        return {"snapshots": db.snapshots(wid, since), "reference": out}
+            totals = db.reference_totals(wid, b, since, scoring.RISK_HIDE_THRESHOLD)
+            med, n = scoring.median_of(totals)
+            low = high = None
+            if n >= 4:      # middle half of prices = "typical range"
+                q = statistics.quantiles(totals, n=4)
+                low, high = round(q[0], 2), round(q[2], 2)
+            out[b] = {"typical": med, "sample_size": n, "low": low, "high": high}
+        return {"snapshots": db.snapshots(wid, since), "reference": out,
+                "lowest_seen": db.lowest_seen(wid, scoring.RISK_HIDE_THRESHOLD)}
 
     @app.get("/api/alerts")
     def alerts(since_id: int = 0, user: User = Depends(current_user)):

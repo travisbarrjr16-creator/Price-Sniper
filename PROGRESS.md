@@ -49,6 +49,16 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
   - Discord webhook.
   - Browser notifications and in-app pop-ups.
 
+### Day-to-day tools (added from Grok's suggestions)
+- **🎯 Target price** per watch (separate from max) → urgent alert plus a "Target hit" badge.
+- **Clearer alert types:** 🎯 target hit and 🔥 new lowest are urgent; ⬇ price drop and 🆕 new under max are normal unless it's a great deal.
+- **✕ Not interested** and **🔇 Mute seller** on every listing, per user, with undo. Hidden ones never alert. They can be managed in Settings.
+- **Deal context:** typical price *range* ("$246–$280 · 14 listings"), "N cheaper right now" / "🥇 Cheapest right now", and "Lowest you've seen" per watch.
+- **Duplicate watch:** copies all settings into the form so you only change the model name.
+- **Quiet hours** per user (in their own time zone), with an option to still buzz for urgent alerts.
+- **Password reset without email:** the admin runs `python -m sniper.admin reset-link email` and sends the one-time link (24h, signs out other devices).
+- All scam reasons are shown as badges, not just the first one.
+
 ### Accounts (multi-user)
 - Email + password sign-up and sign-in. Everyone's watches, results, alerts, and settings are private (tested).
 - Passwords are hashed (scrypt). Sessions are random tokens stored hashed (30 days). Stored Gmail tokens are encrypted.
@@ -72,6 +82,7 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
 | **eBay** | Official Browse API (free key) | Built. New/used/refurb + **local pickup within radius**. Not yet tested with real keys. |
 | **Best Buy** | Official Products API (free key) | Built. New + refurb. Not yet tested with real keys. |
 | **Walmart** | Affiliate API (free walmart.io account, RSA-signed requests) | Built. Request signing is tested. **Unconfirmed whether Walmart still approves new sign-ups.** |
+| **Reddit** | Official API (free "script" app) | Built. r/buildapcsales deals (new) + r/hardwareswap used parts. On r/hardwareswap, only selling posts are used, the price is read from the post body, and the seller's trade count counts as feedback. Tested on sample posts, not live yet. |
 | **Reverb** | Public API (free personal token) | Built. Music gear, some electronics. |
 | **Etsy** | Open API v3 (free key) | Built. Shipping is estimated (Etsy needs an extra call per listing for real shipping). |
 | **Craigslist, OfferUp, Mercari, FB Marketplace, Swappa** | **The user's own saved-search alert emails**, read through Gmail (read-only sign-in with Google) | Built. The parser is best-effort and tested on sample emails, **not real ones yet**. Each user connects their own Gmail. |
@@ -92,7 +103,7 @@ A personal deal aggregator. You enter an item (for example "RTX 4060"), a max pr
 - **Gmail setup:** until Google reviews the app, each user's Gmail has to be added as a "test user" (up to 100 people), because Gmail is a restricted permission.
 - Price history only covers what the app has seen since a watch was created; there's no past sold-price data.
 - Local distance only comes from eBay. Email-alert listings have no distance.
-- No password reset yet. There's no email sending, on purpose.
+- Password reset is by admin link only. There's no email sending, on purpose.
 - The code isn't on GitHub yet.
 
 ---

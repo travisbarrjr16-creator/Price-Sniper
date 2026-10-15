@@ -59,3 +59,23 @@ def test_gmail_alert_parse_merges_links_and_unwraps_redirects():
     assert got["Craigslist"].title == "MSI RTX 4060 Ventus 8GB" and got["Craigslist"].price == 240.0
     assert got["OfferUp"].price == 1255.0 and got["OfferUp"].url == "https://offerup.com/item/detail/abc-123"
     assert got["Craigslist"].local_pickup and not got["Craigslist"].taxable
+
+
+from sniper.sources.reddit import parse_bapcs, parse_hws
+
+
+def test_reddit_buildapcsales():
+    l = parse_bapcs({"id": "a", "title": "[GPU] MSI RTX 4060 Ventus 2X 8GB ($299.99 - $20 MIR = $279.99)",
+                     "url": "https://www.newegg.com/p/123", "domain": "newegg.com", "permalink": "/r/x"})
+    assert (l.price, l.title, l.url, l.condition) == (279.99, "MSI RTX 4060 Ventus 2X 8GB", "https://www.newegg.com/p/123", "new")
+    assert parse_bapcs({"id": "b", "title": "[GPU] RTX 4060 $250", "link_flair_text": "Expired"}) is None
+
+
+def test_reddit_hardwareswap():
+    post = {"id": "b", "title": "[USA-TX] [H] MSI RTX 4060 Ventus, Ryzen 5 5600 [W] PayPal, Local Cash",
+            "selftext": "Timestamps: imgur\n\nMSI RTX 4060 Ventus - $230 shipped\nRyzen 5 5600 - $90",
+            "permalink": "/r/hardwareswap/b", "author": "bob", "author_flair_text": "Trades: 12", "created_utc": 1}
+    l = parse_hws(post, "RTX 4060")
+    assert (l.price, l.shipping, l.seller_feedback_count, l.location) == (230.0, 0.0, 12, "USA-TX")
+    assert parse_hws({**post, "title": "[USA-TX] [H] PayPal [W] RTX 4060"}, "RTX 4060") is None     # buying post
+    assert parse_hws({**post, "title": "[USA-TX] [H] RTX 4060 [W] RTX 3080"}, "RTX 4060") is None   # trade only

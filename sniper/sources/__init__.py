@@ -8,12 +8,13 @@ from .demo import DemoSource
 from .ebay import EbaySource
 from .etsy import EtsySource
 from .gmail import GmailAlertsSource
+from .reddit import RedditSource
 from .reverb import ReverbSource
 from .walmart import WalmartSource
 
 # To add a marketplace: subclass Source and append it here.
 ALL_SOURCES: list[Source] = [
-    EbaySource(), BestBuySource(), WalmartSource(), ReverbSource(), EtsySource(),
+    EbaySource(), BestBuySource(), WalmartSource(), RedditSource(), ReverbSource(), EtsySource(),
     GmailAlertsSource(), DemoSource(),
 ]
 
@@ -36,4 +37,9 @@ def site_of(source_name: str) -> str:
     return source_name.removesuffix(" Local") if source_name != "Demo Local" else source_name
 
 
-__all__ = ["Source", "ALL_SOURCES", "enabled_sources", "get_source", "site_of"]
+def seller_key(source_name: str, seller_name: str | None) -> str | None:
+    """Identifies one seller on one site, for "mute this seller"."""
+    return f"{site_of(source_name)}:{seller_name.strip().lower()}" if seller_name else None
+
+
+__all__ = ["Source", "ALL_SOURCES", "enabled_sources", "get_source", "site_of", "seller_key"]

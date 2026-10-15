@@ -69,6 +69,19 @@ CREATE TABLE IF NOT EXISTS snapshots (
     median_total REAL NOT NULL,
     count INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS user_hidden (
+    user_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,           -- 'seller' (site:seller name) or 'listing' (listing key)
+    value TEXT NOT NULL,
+    label TEXT,                   -- what to show in the UI
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, kind, value)
+);
+CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -85,9 +98,15 @@ class DB:
         self.lock = threading.Lock()
         with self.lock:
             self.conn.executescript(SCHEMA)
-            cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(watches)")}
-            if "user_id" not in cols:   # databases from before accounts existed
-                self.conn.execute("ALTER TABLE watches ADD COLUMN user_id INTEGER")
+            # columns added after the first release
+            for table, col, decl in [
+                ("watches", "user_id", "INTEGER"),
+                ("users", "quiet_start", "TEXT"), ("users", "quiet_end", "TEXT"), ("users", "quiet_tz", "TEXT"),
+                ("users", "quiet_allow_urgent", "INTEGER NOT NULL DEFAULT 1"),
+            ]:
+                cols = {r["name"] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+                if col not in cols:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
             self.conn.commit()
 
     # --- locked reads: the connection is shared by the API's worker threads ---
@@ -115,7 +134,9 @@ class DB:
     # --- users & sessions --------------------------------------------------
     def _row_to_user(self, r: sqlite3.Row) -> User:
         return User(id=r["id"], email=r["email"], ntfy_topic=r["ntfy_topic"],
-                    discord_webhook=r["discord_webhook"], gmail_email=r["gmail_email"])
+                    discord_webhook=r["discord_webhook"], gmail_email=r["gmail_email"],
+                    quiet_start=r["quiet_start"], quiet_end=r["quiet_end"], quiet_tz=r["quiet_tz"],
+                    quiet_allow_urgent=bool(r["quiet_allow_urgent"]))
 
     def create_user(self, email: str, password: str) -> Optional[User]:
         try:
@@ -144,6 +165,64 @@ class DB:
             self.conn.execute("UPDATE users SET ntfy_topic=?, discord_webhook=? WHERE id=?",
                               (ntfy_topic, discord_webhook, uid))
         return self.get_user(uid)
+
+    def update_quiet_hours(self, uid: int, start: Optional[str], end: Optional[str],
+                           tz: Optional[str], allow_urgent: bool) -> User:
+        with self.lock, self.conn:
+            self.conn.execute(
+                "UPDATE users SET quiet_start=?, quiet_end=?, quiet_tz=?, quiet_allow_urgent=? WHERE id=?",
+                (start, end, tz, int(allow_urgent), uid))
+        return self.get_user(uid)
+
+    def find_user_by_email(self, email: str) -> Optional[User]:
+        r = self._read_one("SELECT * FROM users WHERE email=?", (email.strip(),))
+        return self._row_to_user(r) if r else None
+
+    def set_password(self, uid: int, password: str) -> None:
+        """Also signs the user out everywhere."""
+        with self.lock, self.conn:
+            self.conn.execute("UPDATE users SET pw_hash=? WHERE id=?", (security.hash_password(password), uid))
+            self.conn.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+            self.conn.execute("DELETE FROM password_resets WHERE user_id=?", (uid,))
+
+    def create_reset_token(self, uid: int, hours: int = 24) -> str:
+        token = security.new_token()
+        exp = (utcnow() + timedelta(hours=hours)).isoformat()
+        with self.lock, self.conn:
+            self.conn.execute("INSERT INTO password_resets VALUES (?, ?, ?)", (security.token_digest(token), uid, exp))
+        return token
+
+    def use_reset_token(self, token: str, new_password: str) -> Optional[User]:
+        r = self._read_one("SELECT user_id, expires_at FROM password_resets WHERE token_hash=?",
+                           (security.token_digest(token),))
+        if not r or r["expires_at"] < utcnow().isoformat():
+            return None
+        self.set_password(r["user_id"], new_password)   # also deletes this (and every) reset token
+        return self.get_user(r["user_id"])
+
+    # --- per-user hidden sellers / dismissed listings ------------------------
+    def hide(self, uid: int, kind: str, value: str, label: Optional[str]) -> None:
+        with self.lock, self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO user_hidden VALUES (?, ?, ?, ?, ?)",
+                (uid, kind, value, label, utcnow().isoformat()))
+
+    def unhide(self, uid: int, kind: str, value: str) -> None:
+        with self.lock, self.conn:
+            self.conn.execute("DELETE FROM user_hidden WHERE user_id=? AND kind=? AND value=?", (uid, kind, value))
+
+    def list_hidden(self, uid: int) -> list[dict]:
+        return [dict(r) for r in self._read(
+            "SELECT kind, value, label, created_at FROM user_hidden WHERE user_id=? ORDER BY created_at DESC", (uid,))]
+
+    def hidden_sets(self, uid: Optional[int]) -> tuple[set[str], set[str]]:
+        """(muted seller keys, dismissed listing keys)"""
+        if uid is None:
+            return set(), set()
+        sellers, listings = set(), set()
+        for r in self._read("SELECT kind, value FROM user_hidden WHERE user_id=?", (uid,)):
+            (sellers if r["kind"] == "seller" else listings).add(r["value"])
+        return sellers, listings
 
     def set_gmail(self, uid: int, email: Optional[str], refresh_token: Optional[str]) -> None:
         enc = security.encrypt(refresh_token) if refresh_token else None
@@ -247,6 +326,10 @@ class DB:
     def set_alerted(self, wid: int, key: str, total: float) -> None:
         with self.lock, self.conn:
             self.conn.execute("UPDATE listings SET alerted_total=? WHERE watch_id=? AND key=?", (total, wid, key))
+
+    def lowest_seen(self, wid: int, max_risk: int) -> Optional[float]:
+        r = self._read_one("SELECT MIN(total) AS m FROM listings WHERE watch_id=? AND risk<?", (wid, max_risk))
+        return r["m"] if r else None
 
     def reference_totals(self, wid: int, bucket: str, since: str, max_risk: int) -> list[float]:
         """Totals of every distinct, non-risky listing seen recently (active or gone)."""

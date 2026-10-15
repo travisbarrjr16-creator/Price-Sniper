@@ -49,6 +49,7 @@ class Watch:
 
     query: str
     max_price: Optional[float] = None            # compared against total cost
+    target_price: Optional[float] = None         # "I'd jump at this" price; urgent alert when hit
     conditions: list[str] = field(default_factory=lambda: ["new", "open_box", "refurbished", "used"])
     zip_code: Optional[str] = None
     radius_miles: Optional[int] = None           # for local-pickup listings
@@ -90,7 +91,26 @@ class User:
     ntfy_topic: Optional[str] = None
     discord_webhook: Optional[str] = None
     gmail_email: Optional[str] = None   # set when Gmail is connected
+    quiet_start: Optional[str] = None   # "23:00" (user's local time)
+    quiet_end: Optional[str] = None     # "07:00"
+    quiet_tz: Optional[str] = None      # IANA name from the browser, e.g. "America/Chicago"
+    quiet_allow_urgent: bool = True     # still push great deals / target hits during quiet hours
 
     def public(self) -> dict:
         return {"id": self.id, "email": self.email, "ntfy_topic": self.ntfy_topic,
-                "discord_webhook": self.discord_webhook, "gmail_email": self.gmail_email}
+                "discord_webhook": self.discord_webhook, "gmail_email": self.gmail_email,
+                "quiet_start": self.quiet_start, "quiet_end": self.quiet_end, "quiet_tz": self.quiet_tz,
+                "quiet_allow_urgent": self.quiet_allow_urgent}
+
+    def in_quiet_hours(self, now) -> bool:
+        if not (self.quiet_start and self.quiet_end):
+            return False
+        from zoneinfo import ZoneInfo
+        try:
+            local = now.astimezone(ZoneInfo(self.quiet_tz or "UTC"))
+        except Exception:
+            local = now
+        hm = local.strftime("%H:%M")
+        if self.quiet_start <= self.quiet_end:
+            return self.quiet_start <= hm < self.quiet_end
+        return hm >= self.quiet_start or hm < self.quiet_end      # spans midnight

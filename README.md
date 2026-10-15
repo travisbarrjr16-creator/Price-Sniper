@@ -31,6 +31,16 @@ the whole flow right away.
 | **Alerts** | Sent when a listing is **new or cut in price** and either **beats the current lowest** or is **under your max**. The first scan sends one summary alert, not a flood. Delivered through ntfy (phone push), Discord, browser notifications, and in-app toasts. |
 | **One-tap open** | Every result and every push notification links straight to the listing. On a phone, eBay/Best Buy links open in their apps. |
 
+## Day-to-day tools
+
+- **🎯 Target price:** an optional price you'd jump at, separate from the max. When a listing hits it, you get an urgent alert and the listing gets a 🎯 badge.
+- **Alert types:** 🎯 target hit and 🔥 new lowest are sent as urgent. ⬇ price drop under max and 🆕 new under max are normal priority, unless the price rates as a great deal.
+- **✕ Not interested / 🔇 Mute seller** on every listing. Hidden items stop alerting. You can undo from the pop-up, from "Show N you hid", or from Settings.
+- **Deal context:** typical range (middle half of prices, 30 days), how many options are cheaper right now, and the lowest you've ever seen for that watch.
+- **Duplicate** copies a watch's settings into the form, so watching the next model up takes a few seconds.
+- **Quiet hours** (Settings): no phone push during the set hours. You can let urgent alerts through. Alerts are still saved in the app.
+- **Password reset without email:** the admin runs `python -m sniper.admin reset-link person@example.com` and sends the person the one-time link (valid 24h). Using it signs them out everywhere else. `python -m sniper.admin users` lists accounts.
+
 ## Accounts
 
 Each person signs up with an email and password. Watches, results, alerts,
@@ -49,6 +59,7 @@ user's searches use them.
 | **eBay** (Browse API) | New, open box, refurb, used, **local pickup within your radius** | [developer.ebay.com](https://developer.ebay.com) → `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` |
 | **Best Buy** (Products API) | New + refurb retail | [developer.bestbuy.com](https://developer.bestbuy.com) → `BESTBUY_API_KEY` |
 | **Walmart** (Affiliate API) | Walmart.com + marketplace sellers; "Restored" = refurb | [walmart.io](https://walmart.io): make an account, generate an RSA key pair, upload the public key → `WALMART_CONSUMER_ID`, `WALMART_PRIVATE_KEY_PATH`. *Unconfirmed whether new sign-ups are still approved.* |
+| **Reddit** (official API) | **r/buildapcsales** retailer deals (price from the title) and **r/hardwareswap** used parts. For r/hardwareswap, only selling posts are used, the price comes from the post body, and the seller's "Trades: N" counts as feedback | [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps), create a *script* app → `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` |
 | **Reverb** | Music gear, some electronics; new/used | Personal token in reverb.com settings → `REVERB_TOKEN` |
 | **Etsy** (Open API v3) | Handmade/vintage; shipping is estimated | [etsy.com/developers](https://www.etsy.com/developers) → `ETSY_API_KEY` (+ `ETSY_SHARED_SECRET`) |
 | **Email alerts** (Gmail, read-only) | **Craigslist, OfferUp, Mercari, FB Marketplace, Swappa**, through their saved-search alert emails | See below |
