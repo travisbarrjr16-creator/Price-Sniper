@@ -708,3 +708,26 @@ def test_sliding_session_and_watchlist_ignores_hidden(tmp_path, monkeypatch):
     c.post("/api/hidden", json={"kind": "listing", "value": cheapest["key"]})
     (row,) = c.get("/api/watches").json()
     assert row["lowest"] >= cheapest["total_cost"] and row["count"] == len(items) - 1      # hidden one not counted
+
+
+def test_push_payload_limits():
+    import asyncio
+    import json as _json
+
+    import httpx
+
+    from sniper.alerts import Notifier, clip
+
+    sent = []
+    async def go():
+        transport = httpx.MockTransport(lambda req: (sent.append(_json.loads(req.content)), httpx.Response(200))[1])
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await Notifier().send(client, "3 deals", "• $230 @everyone GPU 🎮\n" * 400, "https://ebay.com/itm/1",
+                                         ntfy_topic="abcdefghijkl",
+                                         discord_webhook="https://discord.com/api/webhooks/1/abc")
+    assert asyncio.run(go()) == {"ntfy": None, "Discord": None}
+    ntfy, discord = sent
+    assert len(ntfy["message"].encode()) <= 3800 and ntfy["message"].endswith("…")
+    assert len(discord["content"]) <= 2000 and discord["content"].endswith("https://ebay.com/itm/1")
+    assert discord["allowed_mentions"] == {"parse": []}
+    assert clip("é" * 10, 7) == "éé…"          # never splits a character

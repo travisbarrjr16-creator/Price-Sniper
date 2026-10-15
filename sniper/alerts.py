@@ -23,6 +23,14 @@ def valid_discord_webhook(u: Optional[str]) -> bool:
     return u is None or bool(DISCORD_RE.match(u))
 
 
+def clip(text: str, max_bytes: int) -> str:
+    """Shorten text to fit max_bytes of UTF-8 without splitting a character."""
+    b = text.encode("utf-8")
+    if len(b) <= max_bytes:
+        return text
+    return b[:max_bytes - 3].decode("utf-8", "ignore").rstrip() + "…"
+
+
 class Notifier:
     def __init__(self) -> None:
         self.ntfy_server = os.getenv("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
@@ -37,16 +45,22 @@ class Notifier:
             headers = {"Authorization": f"Bearer {self.ntfy_token}"} if self.ntfy_token else {}
             results["ntfy"] = await self._post(client, self.ntfy_server, headers=headers, json={
                 "topic": ntfy_topic,
-                "title": title,
-                "message": message,
+                "title": clip(title, 250),
+                "message": clip(message, 3800),     # ntfy turns messages over 4096 bytes into a file attachment
                 "click": url,                       # tap the notification -> opens the listing
                 "actions": [{"action": "view", "label": "Open listing", "url": url}],
                 "tags": ["moneybag"],
                 "priority": 5 if urgent else 4,
             })
         if discord_webhook and valid_discord_webhook(discord_webhook):
-            results["Discord"] = await self._post(client, discord_webhook,
-                                                  json={"content": f"**{title}**\n{message}\n{url}"[:1900]})
+            # Discord allows 2000 characters: shorten the text, never the link. Listing titles come
+            # from strangers, so "@everyone" in one must not ping the whole server.
+            room = max(0, 1990 - len(title) - len(url) - 8)
+            text = message if len(message) <= room else message[:max(0, room - 1)].rstrip() + "…"
+            results["Discord"] = await self._post(client, discord_webhook, json={
+                "content": f"**{title[:200]}**\n{text}\n{url}",
+                "allowed_mentions": {"parse": []},
+            })
         for channel, err in results.items():
             if err:
                 log.warning("%s delivery failed: %s", channel, err)
