@@ -154,7 +154,8 @@ class Watcher:
                     for l in res:
                         l.source_key = s.key
                     # only real web links: a "javascript:" or other odd URL must never become an Open button
-                    raw.extend(l for l in res if str(l.url).lower().startswith(("https://", "http://")))
+                    raw.extend(l for l in res if str(l.url).lower().startswith(("https://", "http://"))
+                               and l.price > 0)     # a missing price shows up as $0: never a "deal"
 
             # Strict matching
             rejected = Counter()

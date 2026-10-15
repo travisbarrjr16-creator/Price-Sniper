@@ -670,7 +670,8 @@ def test_non_web_links_are_dropped(tmp_path):
     db = DB(str(tmp_path / "u.db"))
     src = FakeSource()
     src.items = [L("RTX 4060 a", 250, shipping=0, condition="new"),
-                 Listing(source="Test", source_id="evil", title="RTX 4060 evil", url="javascript:alert(1)", price=200)]
+                 Listing(source="Test", source_id="evil", title="RTX 4060 evil", url="javascript:alert(1)", price=200),
+                 L("RTX 4060 no price", 0, shipping=0, condition="new")]       # missing price -> $0
     w = db.create_watch(Watch(query="RTX 4060"))
     stats = asyncio.run(Watcher(db, sources=[src]).check(w))
     assert stats["fetched"] == 1 and all(r["key"] != "Test:evil" for r in db.get_listing_rows(w.id))
