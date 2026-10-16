@@ -44,6 +44,7 @@ cd Price-Sniper
 ```
 
 ## 5. Tailscale, then the setup script
+Run the first two lines, open the sign-in link it prints, then **before the rest** turn on HTTPS in the Tailscale [admin console](https://login.tailscale.com/admin/dns) (DNS → **Enable HTTPS**).
 ```
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up            # opens a sign-in link: open it on your phone/PC and approve
@@ -51,7 +52,7 @@ sudo tailscale set --operator=$USER    # lets the setup script run "tailscale se
 scripts/home/setup.sh
 sudo loginctl enable-linger $USER      # keep the app running after you close the SSH window
 ```
-Before running the setup script, enable HTTPS in the Tailscale [admin console](https://login.tailscale.com/admin/dns) (DNS → **Enable HTTPS**). When the script finishes, it prints your `https://…ts.net` address and the invite code. From here on, **HOME_SETUP.md steps 6–10** apply exactly the same: make your account, add friends, add site keys, updating, backups.
+When the script finishes, it prints your `https://…ts.net` address and the invite code. From here on, **HOME_SETUP.md steps 6–10** apply exactly the same: make your account, add friends, add site keys, updating, backups.
 
 ## 6. Set a budget alert (do this today)
 Console → **Billing** → **Budgets & alerts** → **Create budget** → amount **$1** → alerts at 50%, 90%, and 100%. You'll get an email if anything starts costing money. Check **Billing → Reports** after the first few days too.

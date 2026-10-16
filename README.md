@@ -105,7 +105,8 @@ email-alert source covers those sites the legitimate way.
 ### Gmail alert emails setup (server admin, once)
 1. In [Google Cloud Console](https://console.cloud.google.com), create a project, enable the **Gmail API**, and create an **OAuth client ID** (type *Web application*).
 2. Add the authorized redirect URI `<PUBLIC_URL>/api/gmail/callback`.
-3. On the OAuth consent screen, add the `gmail.readonly` scope. While the app is in **Testing**, add each user's Gmail as a *test user* (up to 100). Publishing it for anyone requires Google's security review, because Gmail is a restricted scope.
+3. In **Google Auth Platform** (it used to be called "OAuth consent screen"), add the `gmail.readonly` scope under **Data Access**. The app stays in **Testing**: go to **Audience → Test users** and add each person's Gmail **before** they try to connect, or Google blocks them (up to 100 people). Publishing it for everyone would need Google's security review, because Gmail is a restricted scope.
+   - **In Testing, Google ends each Gmail connection after 7 days.** The app then shows "⚠ Gmail connection expired: Reconnect" in Settings; it's one click to reconnect.
 4. Put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`.
 
 Then each user goes to **Settings → Connect Gmail** and turns on saved-search
@@ -130,8 +131,9 @@ behind a tunnel. Put it behind HTTPS (Caddy, nginx, or Cloudflare Tunnel), set
 uvicorn sniper.app:app --host 0.0.0.0 --port 8000
 ```
 
-Data is kept in SQLite (`sniper.db`). Back it up together with
-`.sniper_secret`; without the secret, stored Gmail connections can't be decrypted.
+Data is kept in SQLite (`sniper.db`). Back it up together with `.env`, which holds
+`SNIPER_SECRET_KEY` (setup puts it there; older installs may have a `.sniper_secret` file instead).
+Without that key, saved Gmail connections can't be read.
 
 The app writes a backup to `backups/` every day (database + `.env` + `.sniper_secret` + `keys/`, newest 14 kept),
 or run `python -m sniper.admin backup` any time. Use these instead of copying `sniper.db` by hand: while the app
@@ -152,9 +154,10 @@ scripts/update.sh 120 "Adding Newegg, back in 2 min"
 Every open page shows a countdown banner ("Update in 0:45. Finish what
 you're doing"), then "Updating now…". Each page reloads by itself when the
 new version answers, and users stay signed in. If the pull, install, or tests
-fail, the script cancels the banner and leaves the old version running. The
-script assumes a systemd service named `price-sniper` (set `SNIPER_SERVICE`
-to change it).
+fail, the script cancels the banner, puts the code back the way it was, and
+leaves the old version running. It restarts whichever way setup installed the
+app (the `price-sniper` user service on Linux, launchd on Mac); for a system
+service with another name, set `SNIPER_SERVICE`.
 
 To do it by hand:
 `python -m sniper.maintenance announce --in 60` · `cancel` · `status`.

@@ -81,8 +81,13 @@ def _write_backup(db: DB, dest: Path, keep: int) -> Path:
 
 
 def daily(db: DB) -> None:
+    """Once per calendar day, even if the app restarts many times (updates, crashes)."""
+    today = utcnow().date().isoformat()
+    if db.get_setting("housekeeping_day") == today:
+        return
     try:
         log.info("purged old data: %s", purge(db))
         log.info("backup written: %s", backup(db))
+        db.set_setting("housekeeping_day", today)
     except Exception:
         log.exception("housekeeping failed")

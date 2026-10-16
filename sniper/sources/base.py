@@ -13,7 +13,7 @@ from ..models import Listing, Watch
 KEY_SETTINGS = {
     "ebay": "EBAY_CLIENT_ID / EBAY_CLIENT_SECRET", "bestbuy": "BESTBUY_API_KEY", "walmart": "WALMART_CONSUMER_ID",
     "reddit": "REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET", "etsy": "ETSY_API_KEY / ETSY_SHARED_SECRET",
-    "reverb": "REVERB_TOKEN", "gmail": "GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET",
+    "reverb": "REVERB_TOKEN", "gmail": "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET",
 }
 
 

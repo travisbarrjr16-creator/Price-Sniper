@@ -35,7 +35,8 @@ fi
 
 # --- 2. App + dependencies in a private folder (.venv) -------------------------
 say "Installing Price Sniper and its dependencies"
-[[ -d .venv ]] || "$PY" -m venv .venv
+# (a half-made .venv from a failed earlier try, e.g. python3-venv missing, is rebuilt)
+[[ -x .venv/bin/pip ]] || { rm -rf .venv; "$PY" -m venv .venv; }
 .venv/bin/python -m pip install -q --upgrade pip
 .venv/bin/python -m pip install -q --no-cache-dir -c constraints.txt -e ".[dev]"
 
@@ -125,6 +126,7 @@ WantedBy=default.target
 EOF
   systemctl --user daemon-reload
   systemctl --user enable --now price-sniper.service
+  systemctl --user restart price-sniper.service      # running again? pick up the new code and .env settings
   # Keep running after you log out / after a reboot without logging in.
   loginctl enable-linger "$USER" 2>/dev/null || echo "(Optional) run: sudo loginctl enable-linger $USER  so it starts at boot without logging in"
   echo "Started. Logs: journalctl --user -u price-sniper -f"

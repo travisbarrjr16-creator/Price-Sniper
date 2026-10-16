@@ -982,3 +982,13 @@ def test_dotenv_comments_are_not_part_of_values(tmp_path, monkeypatch):
     _load_dotenv(tmp_path / ".env")
     assert (os.environ["A1"], os.environ["A2"], os.environ["A3"], os.environ["A4"]) == ("abc123", "has # hash", "x#y", "")
     assert "A5" not in os.environ
+
+
+def test_daily_housekeeping_once_per_day_across_restarts(tmp_path, monkeypatch):
+    from sniper import housekeeping
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SNIPER_BACKUP_DIR", str(tmp_path / "bk"))
+    db = DB(str(tmp_path / "h.db"))
+    housekeeping.daily(db)
+    housekeeping.daily(DB(str(tmp_path / "h.db")))      # "restart": a new DB object, same file
+    assert len(list((tmp_path / "bk").glob("*.tar.gz"))) == 1
