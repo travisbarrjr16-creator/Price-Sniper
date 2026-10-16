@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import base64
+import html
 import os
 import re
 import time
@@ -57,6 +58,22 @@ def live_lines(body: str) -> list[str]:
     return out
 
 
+def reddit_image(post: dict) -> str | None:
+    """A small preview picture for a post, if Reddit made one (deal posts usually have the product photo)."""
+    if post.get("over_18") or post.get("spoiler"):
+        return None
+    try:
+        img = post["preview"]["images"][0]
+        sizes = sorted(img.get("resolutions") or [], key=lambda r: r.get("width", 0))
+        pick = next((r for r in sizes if r.get("width", 0) >= 140), None) or img.get("source")
+        if pick and pick.get("url"):
+            return html.unescape(pick["url"])         # Reddit sends "&amp;" in these links
+    except (KeyError, IndexError, TypeError):
+        pass
+    thumb = post.get("thumbnail") or ""
+    return thumb if thumb.startswith("https://") else None     # else "self", "default", "nsfw"...
+
+
 def parse_bapcs(post: dict) -> Listing | None:
     """r/buildapcsales: "[GPU] MSI RTX 4060 Ventus ($299.99 - $20 MIR = $279.99)"."""
     title = post.get("title", "")
@@ -81,6 +98,7 @@ def parse_bapcs(post: dict) -> Listing | None:
         shipping=0.0 if free_ship else None,
         condition="refurbished" if "refurb" in title.lower() else "new",
         seller_name=post.get("domain"),            # the retailer
+        image_url=reddit_image(post),
         description=f"reddit deal post by u/{post.get('author')}",
     )
 
@@ -127,6 +145,7 @@ def parse_hws(post: dict, query: str) -> Listing | None:
         location=loc,
         local_pickup=False,
         taxable=False,
+        image_url=reddit_image(post),
         description=(body[:300] + (" local pickup possible" if local else "")),
         listed_at=datetime.fromtimestamp(post.get("created_utc", 0), timezone.utc),
     )

@@ -101,7 +101,12 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .list { display: flex; flex-direction: column; gap: 8px; }
 .item { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
 .item.hidden { opacity: .6; border-style: dashed; }
-.item > img, .item .ph { width: 64px; height: 64px; object-fit: contain; border-radius: 6px; background: var(--surface-2); }
+.item .thumb, .item .ph { width: 64px; height: 64px; border-radius: 6px; background: var(--surface-2); }
+.item .thumb { position: relative; overflow: hidden; }
+.item .thumb img.photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item .thumb .corner { position: absolute; right: 3px; bottom: 3px; display: grid; place-items: center; width: 20px; height: 20px;
+  border-radius: 6px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.item .thumb .corner img { vertical-align: 0; }
 .item .ph { display: grid; place-items: center; font-weight: 650; color: var(--text-2); }
 .item .ph img.store-ico { width: 32px; height: 32px; border-radius: 6px; }
 img.store-ico { vertical-align: -3px; border-radius: 3px; }
@@ -112,7 +117,7 @@ img.store-ico { vertical-align: -3px; border-radius: 3px; }
 .item .total { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .item .bd { font-size: 11px; color: var(--muted); }
 .item a.open { display: inline-block; margin-top: 4px; padding: 5px 10px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-size: 13px; }
-@media (max-width: 560px) { .item { grid-template-columns: 48px 1fr; } .item > img, .item .ph { width: 48px; height: 48px; } .item .ph img.store-ico { width: 26px; height: 26px; } .item .price { grid-column: 1 / -1; text-align: left; display: flex; gap: 12px; align-items: center; } }
+@media (max-width: 560px) { .item { grid-template-columns: 48px 1fr; } .item .thumb, .item .ph { width: 48px; height: 48px; } .item .ph img.store-ico { width: 26px; height: 26px; } .item .price { grid-column: 1 / -1; text-align: left; display: flex; gap: 12px; align-items: center; } }
 .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--neutral-bg); color: var(--text-2); }
 .badge.great, .badge.good { background: var(--good-bg); color: var(--good); }
 .badge.high { background: var(--warn-bg); color: var(--warn); }
@@ -176,7 +181,8 @@ img.store-ico { vertical-align: -3px; border-radius: 3px; }
 .quick a:hover { border-color: var(--accent); }
 .list.compact { gap: 4px; }
 .list.compact .item { padding: 6px 10px; gap: 10px; grid-template-columns: 40px minmax(0, 1fr) auto; }
-.list.compact .item img, .list.compact .item .ph { width: 40px; height: 40px; font-size: 12px; }
+.list.compact .item .thumb, .list.compact .item .ph { width: 40px; height: 40px; font-size: 12px; }
+.list.compact .item .thumb .corner { display: none; } .list.compact .item .ph img.store-ico { width: 22px; height: 22px; }
 .list.compact .item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list.compact .item .acts, .list.compact .item .found, .list.compact .item .bd { display: none; }
 .list.compact .item .total { font-size: 16px; }
@@ -261,7 +267,7 @@ button.primary:hover { background: var(--accent-hover); border-color: var(--acce
 @media (prefers-reduced-motion: no-preference) { .item:hover { transform: translateY(-1px); } }
 .item.deal-great, .item.deal-good { box-shadow: inset 3px 0 0 var(--good); }
 .item.deal-great:hover, .item.deal-good:hover { box-shadow: inset 3px 0 0 var(--good), var(--shadow-hi); }
-.item > img, .item .ph { border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); }
+.item .thumb, .item .ph { border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); }
 .item .t { font-weight: 620; font-size: 14.5px; letter-spacing: -.005em; line-height: 1.35; }
 .item .m { color: var(--muted); margin-top: 4px; }
 .item .m b { color: var(--text-2); font-weight: 650; }
@@ -462,9 +468,18 @@ const storeIcon = (d, size = 16) => d
   ? `<img class="store-ico" src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(d)}.ico" alt="" width="${size}" height="${size}" loading="lazy">` : "";
 // the square on the left of an item: the store's icon, or its initials if there's no icon
 const placeholder = (d, initials) => `<div class="ph" aria-hidden="true" data-initials="${esc(initials)}">${d ? storeIcon(d, 32) : esc(initials)}</div>`;
+// the item's own photo, with the store's little logo in the corner; falls back to the logo square
+const thumb = (img, d, initials) => img
+  ? `<div class="thumb" data-dom="${esc(d || "")}" data-initials="${esc(initials)}"><img class="photo" src="${esc(img)}" alt="" loading="lazy">${d ? `<span class="corner">${storeIcon(d, 16)}</span>` : ""}</div>`
+  : placeholder(d, initials);
 // an icon that doesn't load: drop it (the square falls back to initials)
 document.addEventListener("error", e => {
   const img = e.target;
+  if (img instanceof HTMLImageElement && img.classList.contains("photo")) {      // photo gone: show the store logo instead
+    const t = img.closest(".thumb");
+    if (t) t.outerHTML = placeholder(t.dataset.dom || null, t.dataset.initials || "");
+    return;
+  }
   if (!(img instanceof HTMLImageElement) || !img.classList.contains("store-ico")) return;
   const ph = img.closest(".ph");
   if (ph) ph.textContent = ph.dataset.initials || ""; else img.remove();
@@ -590,7 +605,7 @@ async function renderBrowse(fresh = false) {
   $("#bCats").querySelectorAll("[data-cat]").forEach(x => x.onclick = () => { b.category = x.dataset.cat; renderBrowse(); });
   $("#bSrc").innerHTML = `<option value="">Everywhere</option>` + r.sources.map(s => `<option ${s === b.source ? "selected" : ""}>${esc(s)}</option>`).join("");
   $("#bList").innerHTML = r.items.length ? r.items.map((i, n) => `<div class="item">
-      ${placeholder(i._dom, i.source.startsWith("r/") ? "r/" : "De")}
+      ${thumb(i.image, i._dom, i.source.startsWith("r/") ? "r/" : "De")}
       <div>
         <div class="t">${esc(i.title)}</div>
         <div class="m"><span><b>${esc(i.source)}</b></span><span>${COND[i.condition] || esc(i.condition)}</span><span>${esc(i.category)}</span>
@@ -871,7 +886,7 @@ function itemHTML(i) {
   const was = i.first_total && i.first_total - i.total_cost > 1 ? `<s class="was" title="First seen at this price">${money(i.first_total)}</s>` : "";
   const save = i.deal && i.deal.pct_vs_median <= -3 ? `<div class="save">Save ${money(i.deal.median - i.total_cost)} vs typical</div>` : "";
   return `<div class="item deal-${i.deal ? i.deal.label : "none"} ${i.hidden ? "hidden" : ""} ${i.dismissed || i.muted ? "dismissed" : ""}" data-text="${esc(text)}">
-    ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : placeholder(dom, SITE_ABBR[i.source] || i.site.slice(0, 2))}
+    ${thumb(i.image_url, dom, SITE_ABBR[i.source] || i.site.slice(0, 2))}
     <div>
       <div class="t">${isNew ? '<span class="badge new">NEW</span> ' : ""}${esc(i.title)}</div>
       <div class="m"><span class="store">${storeIcon(dom)}<b>${esc(i.source)}</b>${dom && storeName(dom) !== i.source && !i.source.startsWith(storeName(dom)) ? ` · ${esc(storeName(dom))}` : ""}</span><span>${COND[i.condition] || i.condition}</span>

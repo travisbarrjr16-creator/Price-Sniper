@@ -17,7 +17,7 @@ import httpx
 
 from .db import DB
 from .matching import part_kind
-from .sources.reddit import API, _HWS_TITLE, _MONEY_WORDS, _PRICE, _price, live_lines, parse_bapcs
+from .sources.reddit import API, _HWS_TITLE, _MONEY_WORDS, _PRICE, _price, live_lines, parse_bapcs, reddit_image
 
 CACHE_SECONDS = 600
 MAX_AGE_DAYS = 7
@@ -93,6 +93,7 @@ def parse_swap(post: dict, label: str, sub: str) -> Optional[dict]:
         "condition": "used", "category": guess_category(have, sub),
         "url": "https://www.reddit.com" + post.get("permalink", ""), "store": None,
         "location": m.group("loc").upper() if m else None, "created": post.get("created_utc", 0),
+        "image": reddit_image(post),
     }
 
 
@@ -104,6 +105,7 @@ def parse_deal(post: dict, label: str) -> Optional[dict]:
         "id": f"buildapcsales:{post['id']}", "source": label, "title": l.title[:200], "price": l.price,
         "price_note": "", "condition": l.condition, "category": guess_category(post.get("title", ""), "buildapcsales"),
         "url": str(l.url), "store": l.seller_name, "location": None, "created": post.get("created_utc", 0),
+        "image": l.image_url,
     }
 
 
@@ -120,10 +122,11 @@ def _demo_items() -> list[dict]:
             ("[Keyboard] Keychron V1 QMK", "Peripherals", 64.99, "amazon.com")]
     out = [{"id": f"demo:{i}", "source": "Demo deals", "title": re.sub(r"^\[[^\]]+\]\s*", "", t), "price": p,
             "price_note": "", "condition": "new", "category": c, "url": f"https://example.com/demo/browse-{i}",
-            "store": s, "location": None, "created": now - rnd.randint(300, 86400)} for i, (t, c, p, s) in enumerate(rows)]
+            "store": s, "location": None, "image": None,
+            "created": now - rnd.randint(300, 86400)} for i, (t, c, p, s) in enumerate(rows)]
     out += [{"id": "demo:hws1", "source": "Demo swaps", "title": "RTX 3080 FE 10GB", "price": 360.0, "price_note": "",
              "condition": "used", "category": "GPU", "url": "https://example.com/demo/browse-hws1", "store": None,
-             "location": "USA-TX", "created": now - 5400}]
+             "location": "USA-TX", "image": None, "created": now - 5400}]
     return out
 
 

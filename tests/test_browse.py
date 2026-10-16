@@ -79,3 +79,14 @@ def test_guess_category():
     assert guess_category("Corsair 32GB DDR5 6000") == "RAM"
     assert guess_category("Logitech G Pro X Superlight mouse") == "Peripherals"
     assert guess_category("random thing", "gamesale") == "Games & consoles"
+
+
+def test_reddit_preview_image():
+    from sniper.sources.reddit import reddit_image
+    post = {"preview": {"images": [{"source": {"url": "https://preview.redd.it/big.jpg?a=1&amp;b=2", "width": 1200},
+                                    "resolutions": [{"url": "https://preview.redd.it/s.jpg?w=108&amp;s=x", "width": 108},
+                                                    {"url": "https://preview.redd.it/m.jpg?w=216&amp;s=y", "width": 216}]}]}}
+    assert reddit_image(post) == "https://preview.redd.it/m.jpg?w=216&s=y"      # smallest that's big enough, unescaped
+    assert reddit_image({"thumbnail": "self"}) is None
+    assert reddit_image({"thumbnail": "https://b.thumbs.redditmedia.com/x.jpg"}) == "https://b.thumbs.redditmedia.com/x.jpg"
+    assert reddit_image({**post, "over_18": True}) is None
