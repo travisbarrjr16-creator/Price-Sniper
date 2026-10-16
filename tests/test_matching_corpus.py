@@ -100,6 +100,25 @@ CASES = [
     ('rtx 2070', 'RTX 2070 Super', False),
     ('gtx 1660', 'GTX 1660 Super 6GB', False),
     ('gtx 1660 super', 'GTX 1660 Super 6GB', True),
+    # forgiving search: everyday words and typos, without brand mix-ups
+    ('dell monitor', 'Great deal: Samsung 27 monitor', False),
+    ('hp omen', 'HP Victus 15 laptop open box', False),
+    ('ipad air', 'iPod Air case', False),
+    ('sony headphones', 'Song Headphones', False),
+    ('razer mouse', 'Racer mouse pad', False),
+    ('razer mouse', 'Razer DeathAdder V3 mouse', True),
+    ('gigabyte motherboard', 'ASUS B650 motherboard 2.5 Gigabit LAN', False),
+    ('ram', 'SanDisk 256GB microSD Memory Card', False),
+    ('ram', 'Memory foam seat cushion', False),
+    ('gpu', 'Wacom Intuos Graphics Drawing Tablet', False),
+    ('cpu', 'Intel Core i7-12700K', True),
+    ('processor', 'AMD Ryzen 7 7800X3D', True),
+    ('power supply', 'Corsair RM850x 850W PSU', True),
+    ('power supply', 'Corsair 850W fan', False),
+    ('graphics card', 'MSI RTX 4060 Ventus', True),
+    ('hard drive', 'Seagate 8TB HDD', True),
+    ('samsng 990 pro', 'Samsung 990 PRO 2TB', True),
+    ('geforse rtx 4060', 'NVIDIA GeForce RTX 4060', True),
 ]
 
 

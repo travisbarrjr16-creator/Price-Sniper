@@ -74,12 +74,12 @@ _CROSS_KINDS = {"gpu": ("cpu",), "cpu": ("gpu",), "ram": ("gpu", "cpu"), "storag
 # Everyday words people search with ("ram", "gpu") -> what store titles actually say.
 # Used for the search words only; matched against the (normalized) listing title.
 GENERIC_WORDS = {
-    "ram": r"ram|memory|ddr ?[2-5]|dimm|sodimm",
-    "memory": r"ram|memory|ddr ?[2-5]|dimm|sodimm",
-    "gpu": r"gpu|graphics card|video card|graphics|rtx|gtx|geforce|radeon|arc",
-    "graphics": r"gpu|graphics|video card|rtx|gtx|geforce|radeon",
-    "cpu": r"cpu|processor|ryzen|core i\d|core ultra|xeon|threadripper",
-    "processor": r"cpu|processor",
+    "ram": r"ram|memory(?! card| foam| stick)|ddr ?[2-5]|dimm|sodimm",
+    "memory": r"ram|memory(?! card| foam| stick)|ddr ?[2-5]|dimm|sodimm",
+    "gpu": r"gpu|graphics card|video card|graphics(?! tablet| drawing| pen)|rtx|gtx|geforce|radeon rx|arc [ab]\d",
+    "graphics": r"gpu|graphics(?! tablet| drawing| pen)|video card|rtx|gtx|geforce|radeon rx",
+    "cpu": r"cpu|processor|ryzen|core i ?\d|core ultra|xeon|threadripper",
+    "processor": r"cpu|processor|ryzen|core i ?\d|core ultra|xeon|threadripper",
     "ssd": r"ssd|nvme|solid state|m\.2",
     "nvme": r"nvme|m\.2",
     "hdd": r"hdd|hard drive|hard disk",
@@ -92,6 +92,22 @@ GENERIC_WORDS = {
     "tv": r"tv|television|smart tv",
     "headphones": r"headphones?|headset|earbuds?",
     "headset": r"headset|headphones?",
+}
+# Two-word everyday terms, checked as one ("power supply" ~ "850W PSU")
+GENERIC_PHRASES = [
+    (("power", "supply"), r"power supply|psu"),
+    (("graphics", "card"), GENERIC_WORDS["gpu"]), (("video", "card"), GENERIC_WORDS["gpu"]),
+    (("hard", "drive"), GENERIC_WORDS["hdd"]), (("solid", "state"), GENERIC_WORDS["ssd"]),
+]
+# Real words that show up in listing titles: a search word one letter off from one of these is
+# probably a different thing, not a typo ("razer" vs "racer", "gigabyte" vs "gigabit").
+COMMON_TITLE_WORDS = {
+    "racer", "racing", "gigabit", "gaming", "games", "great", "deals", "board", "cards", "cable", "cables", "stand",
+    "mount", "cover", "black", "white", "silver", "light", "power", "super", "ultra", "sound", "smart", "watch",
+    "phone", "phones", "screen", "pocket", "tablet", "mouse", "mice", "drive", "drives", "dryer", "laser", "paper",
+    "mixer", "music", "tower", "water", "steel", "metal", "glass", "plastic", "wooden", "basic", "ports", "sport",
+    "sports", "speed", "sleep", "slime", "shift", "share", "store", "stock", "storm", "strap", "sense", "since",
+    "inch", "inches", "pound", "pounds", "pairs", "parts", "party", "lights", "tones", "horse", "house", "honor",
 }
 # Search words that say which kind of part it is, even without a model ("ram ddr4", "gpu 8gb")
 _QUERY_KINDS = {
@@ -187,14 +203,14 @@ def close_spelling(word: str, candidates) -> bool:
     Only plain letter words of 4+ letters: numbers and model codes must match exactly (4060 is not
     4070), and short words like "pro"/"max"/"ti" decide the model, so they're never guessed.
     """
-    if len(word) < 4 or not word.isalpha() or word in VARIANT_SUFFIXES:
+    # 5+ letters only: short names are too easy to mix up (dell/deal, sony/song, ipad/ipod, omen/open)
+    if len(word) < 5 or not word.isalpha() or word in VARIANT_SUFFIXES:
         return False
-    limit = 1 if len(word) < 8 else 2
+    limit = 1 if len(word) < 9 else 2
     for c in candidates:
-        if not c.isalpha() or c in VARIANT_SUFFIXES or abs(len(c) - len(word)) > limit:
-            continue
-        if len(word) <= 5 and c[0] != word[0]:
-            continue                       # "dell" isn't "bell"
+        if (not c.isalpha() or c in VARIANT_SUFFIXES or c in COMMON_TITLE_WORDS
+                or abs(len(c) - len(word)) > limit or c[0] != word[0]):
+            continue                       # people rarely get the first letter wrong
         if _typo_distance(word, c, limit) <= limit:
             return True
     return False
@@ -211,7 +227,14 @@ def missing_query_word(text: str, query: str) -> str | None:
     norm = normalize(text)
     split = [_core(w) for w in norm.split()]
     raw = {_core(w) for w in _raw_words(text)} | set(split)
-    for word in _raw_words(query):
+    qwords = _raw_words(query)
+    for phrase, pattern in GENERIC_PHRASES:          # "power supply" counts as one term
+        n = len(phrase)
+        for i in range(len(qwords) - n + 1):
+            if tuple(qwords[i:i + n]) == phrase and re.search(rf"(?<![a-z0-9])({pattern})(?![a-z0-9])", norm):
+                qwords = qwords[:i] + qwords[i + n:]
+                break
+    for word in qwords:
         if _core(word) in raw:
             continue
         parts = [_core(p) for p in normalize(word).split()]
