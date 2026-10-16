@@ -21,6 +21,11 @@ restart_app() {
   fi
 }
 
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "You have changed some of the app's files on this computer (git status shows them)." >&2
+  echo "Updating could undo those changes, so nothing was done. Undo them with: git stash   then run this again." >&2
+  exit 1
+fi
 OLD_COMMIT="$(git rev-parse HEAD)"
 START=$(date +%s)
 "$PY" -m sniper.maintenance announce --in "$NOTICE_SECONDS" ${MESSAGE:+--message "$MESSAGE"}

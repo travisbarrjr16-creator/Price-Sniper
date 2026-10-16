@@ -39,7 +39,7 @@ _ACCESSORY_RE = re.compile(r"\b(backplate|shroud)s? (for|only)\b|\b(only|just) (
 # --- PC parts: a search for one part shouldn't match a whole computer or a bundle -------------
 # Which kind of part a search is for, by keywords in the (normalized) search.
 _PART_KINDS = {
-    "gpu": re.compile(r"\b(rtx|gtx|geforce|radeon|rx \d{3,4}|arc [ab]\d{3})\b"),
+    "gpu": re.compile(r"\b(rtx|gtx|geforce|radeon|rx \d{3,4}|arc [ab] ?\d{3})\b"),
     "cpu": re.compile(r"\b(ryzen|threadripper|xeon|core (i|ultra) ?\d|i[3579] \d{4,5}|\d{4,5}x3d)\b"),
     "ram": re.compile(r"\b(ddr ?[345]|dimm|sodimm)\b"),
     "storage": re.compile(r"\b(nvme|ssd|m\.2|hdd)\b"),
@@ -48,7 +48,7 @@ _PART_KINDS = {
 }
 # Words that mean "this is a whole computer, or several things together".
 _CONTAINER_RE = re.compile(
-    r"\b(laptop|notebook|gaming pc|desktop replacement|desktop|pre ?built|computer|tower pc|full (pc|build|system)|"
+    r"\b(laptop|notebook|chromebook|macbook|imac|mac ?mini|mac studio|iphone|ipad|gaming pc|desktop replacement|desktop|pre ?built|computer|tower pc|full (pc|build|system)|"
     r"complete (pc|build|system)|pc build|custom build|lot of \d+|\d+ ?(pcs|pieces|units)|lot|bundle|combo|"
     r"all in one|aio pc)\b")
 # Phrases that only describe the part, so they don't mean "a whole computer" or "comes with a CPU/GPU":
@@ -76,8 +76,8 @@ _CROSS_KINDS = {"gpu": ("cpu",), "cpu": ("gpu",), "ram": ("gpu", "cpu"), "storag
 GENERIC_WORDS = {
     "ram": r"ram|memory(?! card| foam| stick)|ddr ?[2-5]|dimm|sodimm",
     "memory": r"ram|memory(?! card| foam| stick)|ddr ?[2-5]|dimm|sodimm",
-    "gpu": r"gpu|graphics card|video card|graphics(?! tablet| drawing| pen)|rtx|gtx|geforce|radeon rx|arc [ab]\d",
-    "graphics": r"gpu|graphics(?! tablet| drawing| pen)|video card|rtx|gtx|geforce|radeon rx",
+    "gpu": r"gpu|graphics card|video card|graphics(?! tablet| drawing| pen)|rtx|gtx|geforce|radeon|arc [ab] ?\d+",
+    "graphics": r"gpu|graphics(?! tablet| drawing| pen)|video card|rtx|gtx|geforce|radeon|arc [ab] ?\d+",
     "cpu": r"cpu|processor|ryzen|core i ?\d|core ultra|xeon|threadripper",
     "processor": r"cpu|processor|ryzen|core i ?\d|core ultra|xeon|threadripper",
     "ssd": r"ssd|nvme|solid state|m\.2",

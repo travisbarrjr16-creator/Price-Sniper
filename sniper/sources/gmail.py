@@ -34,9 +34,12 @@ LISTING_PATTERNS = [
     ("FB Marketplace", re.compile(r"https?://(?:www\.|m\.)?facebook\.com/marketplace/item/(\d+)"), 1),
     ("Swappa", re.compile(r"https?://(?:www\.)?swappa\.com/listing/(?:view/)?([A-Z0-9]+)"), 1),
 ]
-# Link text is capped at 400 characters so a mail full of unclosed <a> tags can't make this crawl
-# (an unbounded ".*?" would rescan the rest of the email from every <a>, freezing the app).
-_A_RE = re.compile(r"<a\b[^>]*?href=[\"']([^\"'<>]{1,2000})[\"'][^>]*>((?:[^<]|<(?!/a>)){0,400})</a>", re.I)
+# Opening <a ... href> tags only; the link's content is found with a bounded search for "</a>" below.
+# (A regex like "<a ...>(.*?)</a>" rescans the rest of the email from every unclosed <a>, which a
+# hostile email could use to freeze the app.)
+_A_OPEN_RE = re.compile(r"<a\b[^>]*?href=[\"']([^\"'<>]{1,2000})[\"'][^>]*>", re.I)
+_A_CLOSE_RE = re.compile(r"</a\s*>", re.I)
+LINK_WINDOW = 8000                # a link wrapping a photo + title + price table is a few KB at most
 MAX_EMAIL_HTML = 300_000          # alert emails are ~20-80 KB; anything far bigger isn't a normal alert
 _TAG_RE = re.compile(r"<[^>]+>")
 _PRICE_RE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(\s?k\b)?", re.I)
@@ -70,17 +73,22 @@ def parse_alert_html(body: str) -> list[Listing]:
     """
     found: dict[str, dict] = {}
     body = body[:MAX_EMAIL_HTML]
-    for a in _A_RE.finditer(body):
+    for a in _A_OPEN_RE.finditer(body):
         hit = _match_listing(html.unescape(a.group(1)))
         if not hit:
             continue
+        close = _A_CLOSE_RE.search(body, a.end(), a.end() + LINK_WINDOW)
+        if not close:
+            continue
         name, sid, url = hit
-        anchor = _text(a.group(2))
-        after = _text(body[a.end(): a.end() + 600])
+        anchor = _text(body[a.end():close.start()])
+        after = _text(body[close.end(): close.end() + 600])
         entry = found.setdefault(f"{name}:{sid}", {"name": name, "sid": sid, "url": url, "title": "", "fallback": "", "price": None})
         is_title = anchor and not _PRICE_RE.fullmatch(anchor)
-        if is_title and len(anchor) > len(entry["title"]):
-            entry["title"] = anchor
+        if is_title:
+            clean = re.sub(r"\s+", " ", _PRICE_RE.sub(" ", anchor)).strip(" -–·|,")   # the price isn't part of the title
+            if len(clean) > len(entry["title"]):
+                entry["title"] = clean
         if entry["price"] is None:
             pm = _PRICE_RE.search(anchor) or _PRICE_RE.search(after)
             if pm:

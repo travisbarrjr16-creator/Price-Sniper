@@ -51,7 +51,7 @@ _WHOLE_CATEGORY = [
     (r"\b(iphone|ipad|airpods|macbook|imac|apple watch|mac ?mini|mac studio|mac pro)\b", "Apple"),
     (r"\b(laptop|notebook|chromebook)\b", "Laptop"),
     (r"\b(prebuilt|pre built|gaming pc|gaming desktop|desktop pc)\b", "Prebuilt"),
-    (r"\b(router|\d+ ?port|poe|server|nas|rack ?mount|firewall|access point|managed switch)\b", "Networking & servers"),
+    (r"\b(router|\d+ ?port (?:gigabit |poe\+? |managed |unmanaged |sfp\+? |10g |2\.5g )*switch|\d+ ?port (?:poe|sfp)|poe\+? switch|server|nas|rack ?mount|firewall|access point|managed switch)\b", "Networking & servers"),
     (r"\b(ps5|ps4|xbox|nintendo|switch (?:oled|lite|2)|steam deck|playstation)\b", "Games & consoles"),
 ]
 _WORD_CATEGORY = [

@@ -5,6 +5,11 @@ $ErrorActionPreference = "Stop"
 Set-Location (Resolve-Path "$PSScriptRoot\..")
 $vpy = ".\.venv\Scripts\python.exe"
 
+git diff --quiet; $dirty = $LASTEXITCODE; git diff --cached --quiet; $dirty += $LASTEXITCODE
+if ($dirty) {
+    Write-Host "You have changed some of the app's files on this computer (git status shows them). Updating could undo those changes, so nothing was done. Undo them with: git stash   then run this again." -ForegroundColor Red
+    exit 1
+}
 $oldCommit = (git rev-parse HEAD).Trim()
 $start = Get-Date
 if ($Message) { & $vpy -m sniper.maintenance announce --in $Seconds --message $Message }

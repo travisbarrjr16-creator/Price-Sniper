@@ -51,7 +51,10 @@ def backup(db: DB, dest: Path | None = None, keep: int = BACKUPS_TO_KEEP) -> Pat
     """
     dest = Path(dest or os.getenv("SNIPER_BACKUP_DIR", "backups"))
     dest.mkdir(parents=True, exist_ok=True)
-    os.chmod(dest, 0o700)
+    try:
+        os.chmod(dest, 0o700)
+    except OSError:
+        log.warning("couldn't make %s private (shared or network folder?); backups still written", dest)
     old_umask = os.umask(0o077)      # every file below is created private (it holds your keys)
     try:
         return _write_backup(db, dest, keep)

@@ -15,7 +15,7 @@ def _load_dotenv(path: Path) -> None:
             if v[:1] in ('"', "'") and v[0] in v[1:]:
                 v = v[1:v.index(v[0], 1)]                 # "quoted value"  # comment
             else:
-                v = re.split(r"\s+#", v, maxsplit=1)[0].strip()   # value   # comment after it
+                v = re.split(r"(?:^|\s+)#", v, maxsplit=1)[0].strip()   # value   # comment after it
             os.environ.setdefault(k.strip(), v)
 
 

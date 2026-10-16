@@ -999,3 +999,25 @@ def test_target_above_max_is_refused(tmp_path, monkeypatch):
     r = c.post("/api/watches", json={"query": "RTX 4060", "max_price": 200, "target_price": 300})
     assert r.status_code == 422 and "target" in r.json()["detail"]
     assert c.post("/api/watches", json={"query": "RTX 4060", "max_price": 300, "target_price": 250}).status_code == 200
+
+
+def test_second_pass_fixes(tmp_path, monkeypatch):
+    import os
+    from sniper import _load_dotenv
+    from sniper.browse import guess_category
+    from sniper.matching import missing_query_word
+    from sniper.sources.gmail import parse_alert_html
+    big = ('<a href="https://offerup.com/item/detail/1234567890"><table><tr><td><img src="x.jpg"></td></tr>'
+           '<tr><td style="font-family:Arial;font-size:14px;color:#333;padding:8px 12px">' + "x" * 300 +
+           '</td></tr><tr><td>MSI RTX 4060 Ventus 2X 8GB</td></tr><tr><td>$279.99</td></tr></table></a>')
+    (l,) = parse_alert_html(big)                      # a link wrapping photo + title + price still counts
+    assert l.price == 279.99 and "$" not in l.title
+    (tmp_path / ".env").write_text("ZQ1= # fill me in\nZQ2=hunter2#1\n")
+    for k in ("ZQ1", "ZQ2"):
+        monkeypatch.delenv(k, raising=False)
+    _load_dotenv(tmp_path / ".env")
+    assert (os.environ["ZQ1"], os.environ["ZQ2"]) == ("", "hunter2#1")
+    assert missing_query_word("Intel Arc A770 16GB", "gpu") is None
+    assert missing_query_word("Sapphire Radeon 7800 XT", "graphics card") is None
+    assert guess_category("USB-C 7 port hub") != "Networking & servers"
+    assert guess_category("Netgear 8 port gigabit switch") == "Networking & servers"

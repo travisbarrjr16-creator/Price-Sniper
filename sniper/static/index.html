@@ -560,6 +560,7 @@ $("#f").addEventListener("submit", async e => {
     } else {
       const w = await api("/api/watches", {method: "POST", body: JSON.stringify(body)});
       state.sel = w.id; state.site = ""; state.view = "watches"; syncTabs();
+      try { history.replaceState({view: "watches"}, ""); } catch {}
       if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
     }
     endEdit(); await refresh();
@@ -588,7 +589,8 @@ function showView(v, push = true) {
   else if (state.sel) renderMain();
   else $("#main").innerHTML = EMPTY_MAIN;
 }
-try { history.replaceState({view: "watches"}, ""); } catch {}
+const startView = history.state?.view === "browse" ? "browse" : "watches";
+try { history.replaceState({view: startView}, ""); } catch {}
 addEventListener("popstate", e => {
   const open = document.querySelector("dialog[open]");
   if (open) { open.close(); return; }               // Back closes Settings / alerts first
@@ -1096,6 +1098,7 @@ $("#logoutBtn").onclick = async () => {
   state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: "", showMine: false, showHidden: false,
     view: "watches", b: {category: "", source: "", q: "", max: "", sort: "new"}, browseItems: []};
   syncTabs();
+  try { history.replaceState({view: "watches"}, ""); } catch {}
   $("#main").innerHTML = EMPTY_MAIN; $("#watches").innerHTML = '<div class="empty">Nothing yet.</div>';
   setAuthMode(false);        // come back to "Sign in", not "Create account"
   document.title = "Price Sniper";
@@ -1196,6 +1199,8 @@ async function boot() {
   $("#who").textContent = state.me.email;
   state.sources = (await api("/api/sources")).filter(s => s.enabled);
   $("#srcs").innerHTML = state.sources.map(s => `<label><input type="checkbox" value="${s.key}" checked> ${esc(s.name)}</label>`).join("");
+  if (!state.booted && startView === "browse") { state.view = "browse"; syncTabs(); }   // reloaded while on Browse
+  state.booted = true;
   loadStatus(); refresh(); pollAlerts();
   state.timers.push(setInterval(pollAlerts, 20000));
   state.timers.push(setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60000));
