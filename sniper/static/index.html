@@ -95,14 +95,18 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .list { display: flex; flex-direction: column; gap: 8px; }
 .item { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
 .item.hidden { opacity: .6; border-style: dashed; }
-.item img, .item .ph { width: 64px; height: 64px; object-fit: contain; border-radius: 6px; background: var(--surface-2); }
+.item > img, .item .ph { width: 64px; height: 64px; object-fit: contain; border-radius: 6px; background: var(--surface-2); }
+.item .ph { display: grid; place-items: center; font-weight: 650; color: var(--text-2); }
+.item .ph img.store-ico { width: 32px; height: 32px; border-radius: 6px; }
+img.store-ico { vertical-align: -3px; border-radius: 3px; }
+.m .store { display: inline-flex; align-items: center; gap: 4px; }
 .item .t { font-weight: 550; overflow-wrap: anywhere; }
 .item .m { font-size: 12px; color: var(--text-2); display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
 .item .price { text-align: right; min-width: 110px; }
 .item .total { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .item .bd { font-size: 11px; color: var(--muted); }
 .item a.open { display: inline-block; margin-top: 4px; padding: 5px 10px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-size: 13px; }
-@media (max-width: 560px) { .item { grid-template-columns: 48px 1fr; } .item img, .item .ph { width: 48px; height: 48px; } .item .price { grid-column: 1 / -1; text-align: left; display: flex; gap: 12px; align-items: center; } }
+@media (max-width: 560px) { .item { grid-template-columns: 48px 1fr; } .item > img, .item .ph { width: 48px; height: 48px; } .item .ph img.store-ico { width: 26px; height: 26px; } .item .price { grid-column: 1 / -1; text-align: left; display: flex; gap: 12px; align-items: center; } }
 .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--neutral-bg); color: var(--text-2); }
 .badge.great, .badge.good { background: var(--good-bg); color: var(--good); }
 .badge.high { background: var(--warn-bg); color: var(--warn); }
@@ -374,6 +378,37 @@ const lastSeen = {
 };
 const SITE_ABBR = {"eBay": "eB", "eBay Local": "eB", "Best Buy": "BB", "Walmart": "W", "Etsy": "Et", "Reverb": "Rv",
   "r/buildapcsales": "r/", "r/hardwareswap": "r/", "Craigslist": "CL", "OfferUp": "OU", "Mercari": "Me", "FB Marketplace": "FB"};
+// Where an item is sold: the store's own little icon (favicon), from its link.
+const STORE_NAMES = {"amazon.com": "Amazon", "newegg.com": "Newegg", "bestbuy.com": "Best Buy", "walmart.com": "Walmart",
+  "ebay.com": "eBay", "bhphotovideo.com": "B&H", "microcenter.com": "Micro Center", "adorama.com": "Adorama", "target.com": "Target",
+  "costco.com": "Costco", "samsclub.com": "Sam's Club", "dell.com": "Dell", "lenovo.com": "Lenovo", "hp.com": "HP",
+  "aliexpress.com": "AliExpress", "etsy.com": "Etsy", "reverb.com": "Reverb", "reddit.com": "Reddit", "craigslist.org": "Craigslist",
+  "offerup.com": "OfferUp", "mercari.com": "Mercari", "facebook.com": "Facebook", "swappa.com": "Swappa", "woot.com": "Woot",
+  "gamestop.com": "GameStop", "apple.com": "Apple", "corsair.com": "Corsair", "antonline.com": "Antonline", "monoprice.com": "Monoprice"};
+const DOMAIN_ALIASES = {"amzn.to": "amazon.com", "a.co": "amazon.com", "amzn.com": "amazon.com", "bhpho.to": "bhphotovideo.com",
+  "redd.it": "reddit.com", "ebay.us": "ebay.com", "bit.ly": null, "tinyurl.com": null};
+function storeDomain(url, fallback) {
+  try {
+    let h = new URL(url).hostname.toLowerCase().replace(/^(www|m|smile|old|new)\./, "");
+    const parts = h.split(".");
+    h = parts.slice(/\.(co|com)\.[a-z]{2}$/.test(h) ? -3 : -2).join(".");        // "pages.ebay.com" -> "ebay.com"
+    if (h in DOMAIN_ALIASES) h = DOMAIN_ALIASES[h];
+    if (!h || h === "example.com" || h === "localhost") return fallback ? storeDomain("https://" + fallback) : null;
+    return h;
+  } catch { return null; }
+}
+const storeName = d => STORE_NAMES[d] || d;
+const storeIcon = (d, size = 16) => d
+  ? `<img class="store-ico" src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(d)}.ico" alt="" width="${size}" height="${size}" loading="lazy">` : "";
+// the square on the left of an item: the store's icon, or its initials if there's no icon
+const placeholder = (d, initials) => `<div class="ph" aria-hidden="true" data-initials="${esc(initials)}">${d ? storeIcon(d, 32) : esc(initials)}</div>`;
+// an icon that doesn't load: drop it (the square falls back to initials)
+document.addEventListener("error", e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.classList.contains("store-ico")) return;
+  const ph = img.closest(".ph");
+  if (ph) ph.textContent = ph.dataset.initials || ""; else img.remove();
+}, true);
 const COND = {new: "New", open_box: "Open box", refurbished: "Refurb", used: "Used", parts: "For parts"};
 const DEAL = {great: "Great deal", good: "Good price", fair: "Typical price", high: "Above typical", suspicious: "Too good to be true"};
 let state = {q: "", compact: (() => { try { return localStorage.getItem("compact") === "1"; } catch { return false; } })(),
@@ -462,6 +497,7 @@ async function renderBrowse(fresh = false) {
   let r;
   try { r = await api("/api/browse?" + p); } catch (err) { $("#main").innerHTML = `<div class="card err">${esc(err.message)}</div>`; return; }
   if (state.view !== "browse") return;
+  r.items.forEach(i => i._dom = storeDomain(i.url, i.store));
   state.browseItems = r.items;
   const main = $("#main");
   if (fresh || !$("#browse")) {            // build the controls once, so typing in the search box keeps focus
@@ -494,11 +530,11 @@ async function renderBrowse(fresh = false) {
   $("#bCats").querySelectorAll("[data-cat]").forEach(x => x.onclick = () => { b.category = x.dataset.cat; renderBrowse(); });
   $("#bSrc").innerHTML = `<option value="">Everywhere</option>` + r.sources.map(s => `<option ${s === b.source ? "selected" : ""}>${esc(s)}</option>`).join("");
   $("#bList").innerHTML = r.items.length ? r.items.map((i, n) => `<div class="item">
-      <div class="ph" aria-hidden="true">${i.source.startsWith("r/") ? "r/" : "De"}</div>
+      ${placeholder(i._dom, i.source.startsWith("r/") ? "r/" : "De")}
       <div>
         <div class="t">${esc(i.title)}</div>
         <div class="m"><span><b>${esc(i.source)}</b></span><span>${COND[i.condition] || esc(i.condition)}</span><span>${esc(i.category)}</span>
-          ${i.store ? `<span>at ${esc(i.store)}</span>` : ""}${i.location ? `<span>📍 ${esc(i.location)}</span>` : ""}</div>
+          ${i._dom ? `<span class="store">${storeIcon(i._dom)}${i.condition === "used" && i._dom === "reddit.com" ? "sold by a Reddit user" : "at " + esc(storeName(i._dom))}</span>` : ""}${i.location ? `<span>📍 ${esc(i.location)}</span>` : ""}</div>
         <div class="found">posted ${ago(new Date(i.created * 1000).toISOString())}</div>
         <div class="acts"><button type="button" data-bwatch="${n}" title="Fill in the New watch form with this item">＋ Watch this</button></div>
       </div>
@@ -770,12 +806,13 @@ function itemHTML(i) {
   const dismissBtn = i.dismissed
       ? `<button data-hide="listing" data-undo="1" data-value="${esc(i.key)}">Show again</button>`
       : `<button data-hide="listing" data-value="${esc(i.key)}" data-label="${esc(i.title.slice(0, 60))}" title="Hide this listing">✕ Not interested</button>`;
+  const dom = storeDomain(i.url);
   const text = `${i.title} ${i.source} ${i.seller_name || ""} ${i.location || ""} ${COND[i.condition] || ""}`.toLowerCase();
   return `<div class="item ${i.hidden ? "hidden" : ""} ${i.dismissed || i.muted ? "dismissed" : ""}" data-text="${esc(text)}">
-    ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : `<div class="ph" aria-hidden="true">${esc(SITE_ABBR[i.source] || i.site.slice(0, 2))}</div>`}
+    ${i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : placeholder(dom, SITE_ABBR[i.source] || i.site.slice(0, 2))}
     <div>
       <div class="t">${isNew ? '<span class="badge new">NEW</span> ' : ""}${esc(i.title)}</div>
-      <div class="m"><span><b>${esc(i.source)}</b></span><span>${COND[i.condition] || i.condition}</span>
+      <div class="m"><span class="store">${storeIcon(dom)}<b>${esc(i.source)}</b>${dom && storeName(dom) !== i.source && !i.source.startsWith(storeName(dom)) ? ` · ${esc(storeName(dom))}` : ""}</span><span>${COND[i.condition] || i.condition}</span>
         ${i.local_pickup && i.distance_miles != null ? `<span>📍 ${i.distance_miles} mi${i.location ? " · " + esc(i.location) : ""}</span>` : ""}
         ${seller ? `<span>${seller}</span>` : ""}</div>
       <div class="m" style="margin-top:4px">${target}${lowestEver}${deal}${rank}${risk}</div>
