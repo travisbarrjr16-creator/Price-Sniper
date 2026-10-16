@@ -229,6 +229,17 @@ select.site { width: auto; min-width: 150px; }
 table.hist { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 table.hist td, table.hist th { padding: 3px 6px; border-bottom: 1px solid var(--border); text-align: right; }
 table.hist th:first-child, table.hist td:first-child { text-align: left; }
+#settingsBtn .ico { display: none; }
+@media (max-width: 430px) {
+  header { padding: 8px 12px; gap: 6px; } header h1 { font-size: 15px; } .logo { width: 26px; height: 26px; }
+  header .user button { padding: 6px 9px; min-height: 36px; } .user { gap: 4px; flex-wrap: nowrap; }
+  header .lbl { display: none; } #settingsBtn .ico { display: inline; }
+  header { flex-wrap: nowrap; } header h1 { flex: 1; min-width: 0; white-space: nowrap; }
+}
+@media (max-width: 600px) {
+  #toasts { top: calc(var(--notice-h, 0px) + var(--header-h, 60px) + 8px); bottom: auto; right: 12px; left: 12px; max-width: none; }
+  #toasts .toast { width: auto; }
+}
 /* ===== visual refresh: crisp cards, dark header, strong prices ===== */
 body { font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 750; letter-spacing: -.015em; }
@@ -320,7 +331,7 @@ button.primary:hover { background: var(--accent-hover); border-color: var(--acce
 <header>
   <h1 class="brand"><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg></span>Price Sniper</h1>
   <div class="status" id="status"></div>
-  <div class="user"><span class="email" id="who"></span><button type="button" id="bellBtn" aria-label="Recent alerts" title="Recent alerts">🔔<span class="bellcount" id="bellCount" hidden></span></button><button class="theme-btn" type="button" data-theme-toggle></button><button id="settingsBtn">Settings</button><button id="logoutBtn">Sign out</button></div>
+  <div class="user"><span class="email" id="who"></span><button type="button" id="bellBtn" aria-label="Recent alerts" title="Recent alerts">🔔<span class="bellcount" id="bellCount" hidden></span></button><button class="theme-btn" type="button" data-theme-toggle></button><button id="settingsBtn" aria-label="Settings" title="Settings"><span aria-hidden="true" class="ico">⚙</span><span class="lbl">Settings</span></button><button id="logoutBtn">Sign out</button></div>
 </header>
 
 <dialog id="alertsDlg" aria-labelledby="alertsTitle">
@@ -498,10 +509,19 @@ const api = async (path, opts = {}) => {
     // validation errors come back as a list: turn them into one readable sentence
     const NAMES = {query: "Item", max_price: "Max total", target_price: "Target", zip_code: "ZIP", radius_miles: "Radius",
                    interval_minutes: "Check every", conditions: "Condition", tax_rate: "Sales tax", email: "Email", password: "Password"};
+    const plain = m => (m || "").replace(/^Value error, /, "")
+      .replace(/^String should have at least (\d+) characters?$/, "is too short (at least $1 characters)")
+      .replace(/^String should have at most (\d+) characters?$/, "is too long (at most $1 characters)")
+      .replace(/^Input should be greater than (\S+)$/, "must be more than $1")
+      .replace(/^Input should be less than or equal to (\S+)$/, "must be $1 or less")
+      .replace(/^Input should be greater than or equal to (\S+)$/, "must be at least $1")
+      .replace(/^Input should be a valid (number|integer).*$/, "must be a number")
+      .replace(/^Field required$/, "is required").replace(/^String should match pattern.*$/, "isn't in the right format");
     const msg = Array.isArray(detail)
-      ? detail.map(d => `${NAMES[d.loc?.[d.loc.length - 1]] || d.loc?.[d.loc.length - 1] || "Input"}: ${(d.msg || "").replace(/^Value error, /, "")}`).join(" · ")
-      : detail;
-    throw new Error(msg || r.statusText);
+      ? detail.map(d => `${NAMES[d.loc?.[d.loc.length - 1]] || "That field"} ${plain(d.msg)}`).join(" · ")
+      : String(detail || "");
+    const out = msg || (r.status >= 500 ? "Something went wrong on the server. Try again in a minute." : r.statusText);
+    throw new Error(out.charAt(0).toUpperCase() + out.slice(1));
   }
   return r.json();
 };
@@ -524,7 +544,12 @@ $("#f").addEventListener("submit", async e => {
     sources: (() => { const all = [...document.querySelectorAll("#srcs input")], on = all.filter(i => i.checked);
       return on.length === all.length ? [] : on.map(i => i.value); })(),
   };
+  if (body.query.length < 2) { alert("Type what you want to watch, like RTX 4060."); e.target.query.focus(); return; }
   if (!body.conditions.length) { alert("Tick at least one condition (New, Used, …)."); return; }
+  if (body.max_price && body.target_price && body.target_price > body.max_price) {
+    alert("Your 🎯 target should be at or below your max. The target is the price you'd be thrilled with; the max is the most you'd pay.");
+    e.target.target_price.focus(); return;
+  }
   const btn = $("#add"); btn.disabled = true;
   const editing = state.watches.find(x => x.id === state.editing);
   btn.textContent = editing ? "Saving…" : "Searching…";
@@ -556,22 +581,44 @@ function syncTabs() {
   $("#tabWatches").setAttribute("aria-pressed", state.view === "watches");
   $("#tabBrowse").setAttribute("aria-pressed", state.view === "browse");
 }
-function showView(v) {
+function showView(v, push = true) {
+  if (push && v !== state.view) { try { history.pushState({view: v}, ""); } catch {} }
   state.view = v; syncTabs();
   if (v === "browse") renderBrowse(true);
   else if (state.sel) renderMain();
   else $("#main").innerHTML = EMPTY_MAIN;
 }
+try { history.replaceState({view: "watches"}, ""); } catch {}
+addEventListener("popstate", e => {
+  const open = document.querySelector("dialog[open]");
+  if (open) { open.close(); return; }               // Back closes Settings / alerts first
+  const v = e.state?.view || "watches";
+  if (v !== state.view && state.me) showView(v, false);
+});
+// opening a dialog adds a step, so the phone's Back button closes it instead of leaving the app
+for (const id of ["settings", "alertsDlg"]) {
+  const d = document.getElementById(id), show = d.showModal.bind(d);
+  d.showModal = () => { try { history.pushState({view: state.view, dialog: id}, ""); } catch {} show(); };
+  d.addEventListener("close", () => { if (history.state?.dialog === id) history.back(); });   // closed with ✕/Esc: drop that step
+}
 $("#tabWatches").onclick = () => showView("watches");
 $("#tabBrowse").onclick = () => showView("browse");
 
 const BROWSE_SORTS = {new: "Newest", price: "Cheapest"};
+let browseSeq = 0;
 async function renderBrowse(fresh = false) {
-  const b = state.b, p = new URLSearchParams({category: b.category, source: b.source, q: b.q, sort: b.sort});
-  if (b.max) p.set("max_price", b.max);
+  const b = state.b, p = new URLSearchParams({category: b.category, source: b.source, q: b.q.slice(0, 100), sort: b.sort});
+  if (Number(b.max) > 0) p.set("max_price", b.max);          // 0, negative, or blank = no limit
+  const seq = ++browseSeq;
   let r;
-  try { r = await api("/api/browse?" + p); } catch (err) { $("#main").innerHTML = `<div class="card err">${esc(err.message)}</div>`; return; }
-  if (state.view !== "browse") return;
+  try { r = await api("/api/browse?" + p); }
+  catch (err) {
+    if (seq !== browseSeq || state.view !== "browse") return;
+    if ($("#bList")) $("#bList").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    else $("#main").innerHTML = `<div class="card"><div class="empty">${esc(err.message)}</div></div>`;
+    return;
+  }
+  if (seq !== browseSeq || state.view !== "browse") return;   // an older, slower answer: ignore it
   r.items.forEach(i => i._dom = storeDomain(i.url, i.store));
   state.browseItems = r.items;
   const main = $("#main");
@@ -582,16 +629,16 @@ async function renderBrowse(fresh = false) {
       <div id="bNote"></div>
       <div class="chips" id="bCats" role="group" aria-label="Category"></div>
       <div class="toolbar" style="margin-top:10px">
-        <input id="bQ" type="search" placeholder="Search these deals" aria-label="Search these deals" value="${esc(b.q)}">
-        <input id="bMax" type="number" min="1" step="1" inputmode="numeric" placeholder="Max $" aria-label="Max price" value="${esc(b.max)}">
+        <input id="bQ" type="search" maxlength="100" placeholder="Search these deals" aria-label="Search these deals" value="${esc(b.q)}">
+        <input id="bMax" type="number" min="1" step="1" maxlength="7" inputmode="numeric" placeholder="Max $" aria-label="Max price" value="${esc(b.max)}">
         <select id="bSrc" aria-label="Where from"></select>
         <select id="bSort" aria-label="Sort">${Object.entries(BROWSE_SORTS).map(([k, v]) => `<option value="${k}" ${k === b.sort ? "selected" : ""}>${v}</option>`).join("")}</select>
       </div>
     </div>
     <div class="card"><div class="list" id="bList"></div></div>`;
-    let t;
-    $("#bQ").oninput = e => { clearTimeout(t); t = setTimeout(() => { b.q = e.target.value.trim(); renderBrowse(); }, 300); };
-    $("#bMax").oninput = e => { clearTimeout(t); t = setTimeout(() => { b.max = e.target.value; renderBrowse(); }, 400); };
+    let t;      // one timer, but it reads both boxes, so typing in one never drops the other
+    const typed = () => { clearTimeout(t); t = setTimeout(() => { b.q = $("#bQ").value.trim(); b.max = $("#bMax").value; renderBrowse(); }, 350); };
+    $("#bQ").oninput = typed; $("#bMax").oninput = typed;
     $("#bSrc").onchange = e => { b.source = e.target.value; renderBrowse(); };
     $("#bSort").onchange = e => { b.sort = e.target.value; renderBrowse(); };
   }
@@ -784,6 +831,7 @@ async function renderMainInner(w) {
   $("#compact").onclick = () => { state.compact = !state.compact; try { localStorage.setItem("compact", state.compact ? "1" : "0"); } catch {} renderMain(); };
   $("#q").oninput = e => { state.q = e.target.value; filterList(); };
   filterList();
+  state.chartData = [hist.snapshots, w];
   drawChart(hist.snapshots, w);
 }
 
@@ -1117,9 +1165,13 @@ $("#genTopic").onclick = () => {
   $("#settingsForm").ntfy_topic.value = "sniper-" + [...rnd].map(b => abc[b % abc.length]).join("");
 };
 $("#testAlert").onclick = async () => {
-  const msg = $("#testAlertMsg");
+  const msg = $("#testAlertMsg"), f = $("#settingsForm");
   msg.textContent = "Sending…";
-  try { const r = await api("/api/me/test-alert", {method: "POST"}); msg.textContent = "Sent to " + r.sent_to.join(" + ") + ". Check your phone."; }
+  try {
+    if ((f.ntfy_topic.value || "") !== (state.me.ntfy_topic || "") || (f.discord_webhook.value || "") !== (state.me.discord_webhook || "")) {
+      state.me = {...state.me, ...await api("/api/me", {method: "PUT", body: JSON.stringify({ntfy_topic: f.ntfy_topic.value, discord_webhook: f.discord_webhook.value})})};
+    }                                   // test what's on screen, not the last saved topic
+    const r = await api("/api/me/test-alert", {method: "POST"}); msg.textContent = "Sent to " + r.sent_to.join(" + ") + ". Check your phone."; }
   catch (err) { msg.textContent = err.message; }
 };
 $("#settingsForm").addEventListener("submit", async e => {
@@ -1176,7 +1228,7 @@ function applyTheme(t) {
   try { t === "auto" ? localStorage.removeItem("theme") : localStorage.setItem("theme", t); } catch {}
   document.querySelectorAll("[data-theme-toggle]").forEach(b => {
     const [icon, label] = THEMES[t];
-    b.textContent = `${icon} ${label}`;
+    b.innerHTML = `<span aria-hidden="true">${icon}</span><span class="lbl"> ${label}</span>`;
     b.title = "Theme: " + label + " (click to change)";
     b.setAttribute("aria-label", "Theme: " + label + ". Click to change.");
   });
@@ -1232,6 +1284,12 @@ setInterval(renderNotice, 1000);
 // the header's real height (it wraps on small screens), for sticky/scroll offsets
 new ResizeObserver(([e]) => document.documentElement.style.setProperty("--header-h", Math.ceil(e.target.offsetHeight) + "px"))
   .observe(document.querySelector("#app header"));
+// rotate / resize: redraw the chart at the new width
+let chartTimer;
+addEventListener("resize", () => {
+  clearTimeout(chartTimer);
+  chartTimer = setTimeout(() => { if ($("#chart") && state.chartData && state.view === "watches") drawChart(...state.chartData); }, 150);
+});
 // long result lists on phones: a quick way back up to the watch switcher
 addEventListener("scroll", () => { $("#toTop").hidden = scrollY < 1200 || $("#app").hidden; }, {passive: true});
 $("#toTop").onclick = () => {

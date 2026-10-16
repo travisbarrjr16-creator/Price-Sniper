@@ -992,3 +992,10 @@ def test_daily_housekeeping_once_per_day_across_restarts(tmp_path, monkeypatch):
     housekeeping.daily(db)
     housekeeping.daily(DB(str(tmp_path / "h.db")))      # "restart": a new DB object, same file
     assert len(list((tmp_path / "bk").glob("*.tar.gz"))) == 1
+
+
+def test_target_above_max_is_refused(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch); _signup(c)
+    r = c.post("/api/watches", json={"query": "RTX 4060", "max_price": 200, "target_price": 300})
+    assert r.status_code == 422 and "target" in r.json()["detail"]
+    assert c.post("/api/watches", json={"query": "RTX 4060", "max_price": 300, "target_price": 250}).status_code == 200

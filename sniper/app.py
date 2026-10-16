@@ -399,6 +399,8 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         return w
 
     def _validate(body: WatchIn) -> None:
+        if body.max_price and body.target_price and body.target_price > body.max_price:
+            raise HTTPException(422, "Your 🎯 target should be at or below your max (it's the price you'd be thrilled with)")
         bad = [c for c in body.conditions if c not in CONDITIONS]
         if bad:
             raise HTTPException(422, f"unknown condition(s): {bad}")
