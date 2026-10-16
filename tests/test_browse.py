@@ -90,3 +90,37 @@ def test_reddit_preview_image():
     assert reddit_image({"thumbnail": "self"}) is None
     assert reddit_image({"thumbnail": "https://b.thumbs.redditmedia.com/x.jpg"}) == "https://b.thumbs.redditmedia.com/x.jpg"
     assert reddit_image({**post, "over_18": True}) is None
+
+
+def test_browse_survives_bad_posts_and_categories(tmp_path, monkeypatch):
+    monkeypatch.setenv("REDDIT_CLIENT_ID", "id")
+    monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret")
+    bad = {"buildapcsales": [{"title": "[GPU] RTX 4060 $279", "created_utc": None},          # no id, null time
+                             {"id": "z", "title": "[GPU] RTX 4060 $279", "created_utc": time.time(), "url": None,
+                              "permalink": "/r/x/z"}]}
+    calls = []
+
+    def handler(req):
+        calls.append(str(req.url))
+        if "access_token" in str(req.url):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        sub = req.url.path.split("/")[2]
+        return httpx.Response(200, json={"data": {"children": [{"data": p} for p in bad.get(sub, [])]}})
+    db = DB(str(tmp_path / "bad.db"))
+    b = Browser(db, RedditSource(), transport=httpx.MockTransport(handler))
+    asyncio.run(b.items())
+    n = len(calls)
+    asyncio.run(b.items())
+    assert len(calls) == n                       # cached even when posts were junk (no refetch loop)
+    assert db.usage_today("reddit") == n         # every call counted
+    assert guess_category("MacBook Air M2 16GB RAM 512GB SSD") == "Apple"
+    assert guess_category("Gaming laptop RTX 4070") == "Laptop"
+    assert guess_category("Prebuilt PC Ryzen 7 RTX 3080") == "Prebuilt"
+    assert guess_category("Cisco 24 port PoE switch") == "Networking & servers"
+    assert guess_category("Nintendo Switch OLED") == "Games & consoles"
+
+
+def test_browse_part_search_skips_whole_machines():
+    items = [{"title": "ASUS TUF Gaming Laptop RTX 4060", "category": "Laptop", "source": "s", "price": 900},
+             {"title": "MSI RTX 4060 Ventus 8GB", "category": "GPU", "source": "s", "price": 280}]
+    assert [i["title"] for i in filter_items(items, q="rtx 4060")] == ["MSI RTX 4060 Ventus 8GB"]

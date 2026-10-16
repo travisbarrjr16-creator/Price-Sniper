@@ -45,14 +45,18 @@ _TAGS = {
     "networking": "Networking & servers", "nas": "Networking & servers",
 }
 _KIND_CATEGORY = {"gpu": "GPU", "cpu": "CPU", "ram": "RAM", "storage": "Storage", "psu": "PSU", "board": "Motherboard"}
+# Whole machines and gear first, so "MacBook Air 16GB RAM 512GB SSD" is Apple, not Storage.
+_WHOLE_CATEGORY = [
+    (r"\b(iphone|ipad|airpods|macbook|imac|apple watch|mac ?mini|mac studio|mac pro)\b", "Apple"),
+    (r"\b(laptop|notebook|chromebook)\b", "Laptop"),
+    (r"\b(prebuilt|pre built|gaming pc|gaming desktop|desktop pc)\b", "Prebuilt"),
+    (r"\b(router|\d+ ?port|poe|server|nas|rack ?mount|firewall|access point|managed switch)\b", "Networking & servers"),
+    (r"\b(ps5|ps4|xbox|nintendo|switch (?:oled|lite|2)|steam deck|playstation)\b", "Games & consoles"),
+]
 _WORD_CATEGORY = [
-    (r"\b(monitor|display)\b", "Monitor"), (r"\b(laptop|notebook|macbook)\b", "Laptop"),
-    (r"\b(prebuilt|gaming pc)\b", "Prebuilt"), (r"\b(keyboard|mouse|controller|webcam)\b", "Peripherals"),
+    (r"\b(monitor|display)\b", "Monitor"), (r"\b(keyboard|mouse|controller|webcam)\b", "Peripherals"),
     (r"\b(headphones?|headset|earbuds|speakers?|dac|amp)\b", "Audio"),
-    (r"\b(iphone|ipad|airpods|imac|apple watch|mac mini|mac studio)\b", "Apple"),
-    (r"\b(ps5|ps4|xbox|switch|nintendo|steam deck|playstation)\b", "Games & consoles"),
     (r"\b(case|cooler|aio|fans?)\b", "Case & cooling"),
-    (r"\b(router|switch(?:es)? \d+ ?port|server|nas|rack|poe)\b", "Networking & servers"),
 ]
 
 
@@ -62,6 +66,9 @@ def guess_category(text: str, sub: str = "") -> str:
         tag = m.group(1).strip()
         if tag in _TAGS:
             return _TAGS[tag]
+    for rx, cat in _WHOLE_CATEGORY:
+        if re.search(rx, low):
+            return cat
     if kind := part_kind(text):
         return _KIND_CATEGORY.get(kind, "Other")
     for rx, cat in _WORD_CATEGORY:
@@ -92,7 +99,7 @@ def parse_swap(post: dict, label: str, sub: str) -> Optional[dict]:
         "price": min(prices) if prices else None, "price_note": "from" if len(prices) > 1 else "",
         "condition": "used", "category": guess_category(have, sub),
         "url": "https://www.reddit.com" + post.get("permalink", ""), "store": None,
-        "location": m.group("loc").upper() if m else None, "created": post.get("created_utc", 0),
+        "location": m.group("loc").upper() if m else None, "created": post.get("created_utc") or 0,
         "image": reddit_image(post),
     }
 
@@ -104,7 +111,7 @@ def parse_deal(post: dict, label: str) -> Optional[dict]:
     return {
         "id": f"buildapcsales:{post['id']}", "source": label, "title": l.title[:200], "price": l.price,
         "price_note": "", "condition": l.condition, "category": guess_category(post.get("title", ""), "buildapcsales"),
-        "url": str(l.url), "store": l.seller_name, "location": None, "created": post.get("created_utc", 0),
+        "url": str(l.url), "store": l.seller_name, "location": None, "created": post.get("created_utc") or 0,
         "image": l.image_url,
     }
 
@@ -154,52 +161,65 @@ class Browser:
 
     async def _refresh(self) -> None:
         limit = self.reddit.daily_limit()
-        if limit and self.db.usage_today(self.reddit.key) + len(FEEDS) > limit * 0.9:
+        if limit and self.db.usage_today(self.reddit.key) + len(FEEDS) + 1 > limit * 0.9:
             self._error = "Reddit's daily limit is almost used up, so Browse shows older results until tomorrow."
             self._at = time.time()
             return
         cutoff = time.time() - MAX_AGE_DAYS * 86400
         out: list[dict] = []
-        errors = []
+        errors: list[str] = []
         calls = 0
-        async with httpx.AsyncClient(timeout=20, transport=self._transport) as client:
-            try:
-                headers = await self.reddit._auth(client)
-                calls += 1
-            except Exception as e:  # noqa: BLE001 - shown to the user as a note
-                self._error = f"Couldn't sign in to Reddit ({type(e).__name__})."
-                self._at = time.time()
-                return
-            for sub, label, kind in FEEDS:
+        try:
+            async with httpx.AsyncClient(timeout=20, transport=self._transport) as client:
+                had_token = self.reddit._token
                 try:
-                    r = await client.get(f"{API}/r/{sub}/new", headers=headers, params={"limit": "100"})
-                    calls += 1
-                    r.raise_for_status()
-                    posts = [c["data"] for c in r.json().get("data", {}).get("children", [])]
-                except Exception as e:  # noqa: BLE001 - one subreddit failing shouldn't hide the rest
-                    errors.append(f"{label}: {type(e).__name__}")
-                    continue
-                for p in posts:
-                    if p.get("created_utc", 0) < cutoff or p.get("stickied") or p.get("removed_by_category"):
+                    headers = await self.reddit._auth(client)
+                except Exception as e:  # noqa: BLE001 - shown to the user as a note
+                    self._error = f"Couldn't sign in to Reddit ({type(e).__name__})."
+                    return
+                finally:
+                    calls += self.reddit._token != had_token        # only count a real sign-in
+                for sub, label, kind in FEEDS:
+                    try:
+                        r = await client.get(f"{API}/r/{sub}/new", headers=headers, params={"limit": "100"})
+                        calls += 1
+                        if r.status_code == 401:                     # key expired early: fresh one, once
+                            self.reddit._token = None
+                            headers = await self.reddit._auth(client)
+                            r = await client.get(f"{API}/r/{sub}/new", headers=headers, params={"limit": "100"})
+                            calls += 2
+                        r.raise_for_status()
+                        posts = [c["data"] for c in r.json().get("data", {}).get("children", [])]
+                    except Exception as e:  # noqa: BLE001 - one subreddit failing shouldn't hide the rest
+                        errors.append(f"{label}: {type(e).__name__}")
                         continue
-                    item = parse_deal(p, label) if kind == "deal" else parse_swap(p, label, sub)
-                    if item and str(item["url"]).startswith(("https://", "http://")):
-                        out.append(item)
-        self.db.add_usage(self.reddit.key, calls)
-        out.sort(key=lambda i: i["created"], reverse=True)
-        if out or not self._items:
-            self._items = out
-        self._error = ("Some subreddits didn't load: " + ", ".join(errors)) if errors else None
-        self._at = time.time()
+                    for p in posts:
+                        try:                     # one odd post must never break the whole feed
+                            if ((p.get("created_utc") or 0) < cutoff or p.get("stickied")
+                                    or p.get("removed_by_category")):
+                                continue
+                            item = parse_deal(p, label) if kind == "deal" else parse_swap(p, label, sub)
+                            if item and str(item["url"]).startswith(("https://", "http://")):
+                                out.append(item)
+                        except Exception:  # noqa: BLE001
+                            continue
+            out.sort(key=lambda i: i["created"] or 0, reverse=True)
+            if out or not self._items:
+                self._items = out
+            self._error = ("Some subreddits didn't load: " + ", ".join(errors)) if errors else None
+        finally:
+            self.db.add_usage(self.reddit.key, calls)
+            self._at = time.time()          # even after a failure: retry in 10 minutes, not on every click
 
 
 def filter_items(items: list[dict], category: str = "", source: str = "", q: str = "",
                  max_price: Optional[float] = None, sort: str = "new") -> list[dict]:
-    from .matching import missing_query_word
+    from .matching import missing_query_word, whole_system_reason
+    q = " ".join(q.split()[:8])                     # long typo-heavy searches stay cheap
     out = [i for i in items
            if (not category or i["category"] == category)
            and (not source or i["source"] == source)
-           and (not q or missing_query_word(i["title"], q) is None)
+           and (not q or (missing_query_word(i["title"], q) is None and not whole_system_reason(i["title"], q)))
            and (max_price is None or (i["price"] is not None and i["price"] <= max_price))]
     if sort == "price":
         out.sort(key=lambda i: (i["price"] is None, i["price"] or 0))
