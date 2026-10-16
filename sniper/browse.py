@@ -17,6 +17,7 @@ import httpx
 
 from .db import DB
 from .matching import part_kind
+from .sources.base import friendly_error
 from .sources.reddit import API, _HWS_TITLE, _MONEY_WORDS, _PRICE, _price, live_lines, parse_bapcs, reddit_image
 
 CACHE_SECONDS = 600
@@ -175,7 +176,7 @@ class Browser:
                 try:
                     headers = await self.reddit._auth(client)
                 except Exception as e:  # noqa: BLE001 - shown to the user as a note
-                    self._error = f"Couldn't sign in to Reddit ({type(e).__name__})."
+                    self._error = "Browse: " + friendly_error(self.reddit, e)
                     return
                 finally:
                     calls += self.reddit._token != had_token        # only count a real sign-in

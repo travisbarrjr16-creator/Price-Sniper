@@ -18,6 +18,7 @@ from .matching import match
 from .models import Listing, ScoredListing, Watch, utcnow
 from .matching import normalize
 from .sources import Source, enabled_sources, seller_key, site_of
+from .sources.base import friendly_error, scrub
 
 log = logging.getLogger("sniper.watcher")
 
@@ -147,8 +148,8 @@ class Watcher:
             results = await asyncio.gather(*(self._search_counted(s, watch) for s in sources), return_exceptions=True)
             for s, res in zip(sources, results):
                 if isinstance(res, Exception):
-                    errors.append(f"{s.name}: {res}")
-                    log.warning("source %s failed: %s", s.name, res)
+                    errors.append(f"{s.name}: {friendly_error(s, res)}")
+                    log.warning("source %s failed: %s", s.name, scrub(res))
                 else:
                     for l in res:
                         l.source_key = s.key

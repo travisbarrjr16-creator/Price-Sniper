@@ -950,3 +950,35 @@ def test_security_hardening(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     archive = backup(c.app.state.db, tmp_path / "bk")
     assert stat.S_IMODE(archive.stat().st_mode) == 0o600 and stat.S_IMODE((tmp_path / "bk").stat().st_mode) == 0o700
+
+
+def test_site_errors_are_plain_and_never_show_keys(tmp_path):
+    import httpx
+    from sniper.sources.base import friendly_error, scrub
+
+    class Leaky(FakeSource):
+        key, name = "bestbuy", "Best Buy"
+
+        async def search(self, watch, client):
+            req = httpx.Request("GET", "https://api.bestbuy.com/v1/products(search=rtx)?apiKey=SECRETKEY123&format=json")
+            raise httpx.HTTPStatusError("403 Forbidden for url " + str(req.url), request=req,
+                                        response=httpx.Response(403, request=req))
+    db = DB(str(tmp_path / "k.db"))
+    w = db.create_watch(Watch(query="RTX 4060"))
+    asyncio.run(Watcher(db, sources=[Leaky()]).check(w))
+    err = db.get_watch(w.id).last_error
+    assert "SECRETKEY123" not in err and "BESTBUY_API_KEY" in err and "turned down" in err
+    assert "SECRET" not in scrub("Client error for url https://x.com/a?apiKey=SECRET&b=1")
+    req = httpx.Request("GET", "https://api.ebay.com/x")
+    assert "didn't answer" in friendly_error(Leaky(), httpx.ReadTimeout("t", request=req))
+
+
+def test_dotenv_comments_are_not_part_of_values(tmp_path, monkeypatch):
+    import os
+    from sniper import _load_dotenv
+    (tmp_path / ".env").write_text('A1=abc123   # a note\nA2="has # hash"  # note\nA3=x#y\nA4=\n# A5=skip\n')
+    for k in ("A1", "A2", "A3", "A4", "A5"):
+        monkeypatch.delenv(k, raising=False)
+    _load_dotenv(tmp_path / ".env")
+    assert (os.environ["A1"], os.environ["A2"], os.environ["A3"], os.environ["A4"]) == ("abc123", "has # hash", "x#y", "")
+    assert "A5" not in os.environ

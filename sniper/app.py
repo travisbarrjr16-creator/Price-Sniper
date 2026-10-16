@@ -32,6 +32,7 @@ from .sources import gmail
 from .watcher import HISTORY_DAYS, Watcher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)     # it logs every request URL, and some URLs carry API keys
 STATIC = Path(__file__).parent / "static"
 log = logging.getLogger("sniper.app")
 COOKIE = "sniper_session"
