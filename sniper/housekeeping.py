@@ -51,6 +51,15 @@ def backup(db: DB, dest: Path | None = None, keep: int = BACKUPS_TO_KEEP) -> Pat
     """
     dest = Path(dest or os.getenv("SNIPER_BACKUP_DIR", "backups"))
     dest.mkdir(parents=True, exist_ok=True)
+    os.chmod(dest, 0o700)
+    old_umask = os.umask(0o077)      # every file below is created private (it holds your keys)
+    try:
+        return _write_backup(db, dest, keep)
+    finally:
+        os.umask(old_umask)
+
+
+def _write_backup(db: DB, dest: Path, keep: int) -> Path:
     stamp = utcnow().strftime("%Y%m%d-%H%M%S-%f")     # unique even for two backups in one second
     snap = dest / f".sniper-{stamp}.db"
     with db.lock:

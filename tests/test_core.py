@@ -933,3 +933,20 @@ def test_loose_searches_and_typos():
         got = match(Listing(source="T", source_id="1", title=t, url="https://x", price=100, condition="new"),
                     Watch(query=q))[0]
         assert got == expected, (q, t)
+
+
+def test_security_hardening(tmp_path, monkeypatch):
+    import stat
+    import time as _t
+    from sniper.sources.gmail import parse_alert_html
+    t0 = _t.time()
+    parse_alert_html('<a href="x">' * 100000)               # a hostile email can't freeze the app
+    assert _t.time() - t0 < 5
+    c = _client(tmp_path, monkeypatch); _signup(c)
+    w = c.post("/api/watches", json={"query": "RTX 4060"}).json()
+    assert c.get(f"/api/watches/{w['id']}/history", params={"days": 999999999}).status_code == 422
+    assert c.get("/api/alerts", params={"since_id": 10 ** 23}).status_code == 422
+    from sniper.housekeeping import backup
+    monkeypatch.chdir(tmp_path)
+    archive = backup(c.app.state.db, tmp_path / "bk")
+    assert stat.S_IMODE(archive.stat().st_mode) == 0o600 and stat.S_IMODE((tmp_path / "bk").stat().st_mode) == 0o700

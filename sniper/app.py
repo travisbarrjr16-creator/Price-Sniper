@@ -507,7 +507,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         return {"items": items, "sites": dict(sorted(sites.items())), "hidden_by_you": hidden_by_you}
 
     @app.get("/api/watches/{wid}/history")
-    def history(wid: WatchId, days: int = HISTORY_DAYS, user: User = Depends(current_user)):
+    def history(wid: WatchId, days: int = Query(HISTORY_DAYS, ge=1, le=3650), user: User = Depends(current_user)):
         _get(wid, user)
         since = (utcnow() - timedelta(days=days)).isoformat()
         out = {}
@@ -542,7 +542,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
                 "demo": not browser.live, "note": note}
 
     @app.get("/api/alerts")
-    def alerts(since_id: int = 0, user: User = Depends(current_user)):
+    def alerts(since_id: int = Query(0, ge=0, le=2**62), user: User = Depends(current_user)):
         return db.list_alerts(user.id, since_id)
 
     @app.get("/api/status")

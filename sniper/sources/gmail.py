@@ -6,6 +6,7 @@ No marketplace passwords and no scraping: it only reads mail the user already go
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import html
 import os
@@ -33,7 +34,10 @@ LISTING_PATTERNS = [
     ("FB Marketplace", re.compile(r"https?://(?:www\.|m\.)?facebook\.com/marketplace/item/(\d+)"), 1),
     ("Swappa", re.compile(r"https?://(?:www\.)?swappa\.com/listing/(?:view/)?([A-Z0-9]+)"), 1),
 ]
-_A_RE = re.compile(r"<a\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", re.I | re.S)
+# Link text is capped at 400 characters so a mail full of unclosed <a> tags can't make this crawl
+# (an unbounded ".*?" would rescan the rest of the email from every <a>, freezing the app).
+_A_RE = re.compile(r"<a\b[^>]*?href=[\"']([^\"'<>]{1,2000})[\"'][^>]*>((?:[^<]|<(?!/a>)){0,400})</a>", re.I)
+MAX_EMAIL_HTML = 300_000          # alert emails are ~20-80 KB; anything far bigger isn't a normal alert
 _TAG_RE = re.compile(r"<[^>]+>")
 _PRICE_RE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(\s?k\b)?", re.I)
 
@@ -65,6 +69,7 @@ def parse_alert_html(body: str) -> list[Listing]:
     first price found is kept.
     """
     found: dict[str, dict] = {}
+    body = body[:MAX_EMAIL_HTML]
     for a in _A_RE.finditer(body):
         hit = _match_listing(html.unescape(a.group(1)))
         if not hit:
@@ -177,7 +182,7 @@ class GmailAlertsSource(Source):
             if m.status_code != 200:
                 continue
             for body in _bodies(m.json().get("payload", {})):
-                for l in parse_alert_html(body):
+                for l in await asyncio.to_thread(parse_alert_html, body):   # never blocks the rest of the app
                     out.setdefault(l.key, l)
         if len(messages) >= 3 and not out:
             # Alert emails are arriving but nothing could be read from them: the site probably changed its layout.

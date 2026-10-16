@@ -45,8 +45,9 @@ def _fernet() -> Fernet:
             key = path.read_text().strip()
         else:
             key = Fernet.generate_key().decode()
-            path.write_text(key)
-            path.chmod(0o600)
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)   # private from the first byte
+            with os.fdopen(fd, "w") as f:
+                f.write(key)
     return Fernet(key.encode() if isinstance(key, str) else key)
 
 
