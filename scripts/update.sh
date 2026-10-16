@@ -21,17 +21,31 @@ restart_app() {
   fi
 }
 
+OLD_COMMIT="$(git rev-parse HEAD)"
+START=$(date +%s)
 "$PY" -m sniper.maintenance announce --in "$NOTICE_SECONDS" ${MESSAGE:+--message "$MESSAGE"}
-# If anything below fails, take the banner down so users aren't left waiting.
-trap '"$PY" -m sniper.maintenance cancel; echo "update failed; notice cancelled, old version still running" >&2' ERR
+
+rollback() {
+  # Take the banner down, and put the code back the way it was, so a later restart or reboot
+  # never runs a version that failed its tests.
+  "$PY" -m sniper.maintenance cancel || true
+  if [[ "$(git rev-parse HEAD)" != "$OLD_COMMIT" ]]; then
+    git reset -q --hard "$OLD_COMMIT" && "$PY" -m pip install -q -c constraints.txt -e ".[dev]" || true
+  fi
+  echo "update failed; notice cancelled, the old version is still running (code put back to ${OLD_COMMIT:0:7})" >&2
+}
+trap rollback ERR
 
 # Fetch and install during the countdown. The running app keeps serving the old code.
 git pull --ff-only
 "$PY" -m pip install -q -c constraints.txt -e ".[dev]"
 "$PY" -m pytest -q
 
-echo "waiting ${NOTICE_SECONDS}s for the countdown..."
-sleep "$NOTICE_SECONDS"
+LEFT=$(( NOTICE_SECONDS - ($(date +%s) - START) ))     # the countdown has been running meanwhile
+if (( LEFT > 0 )); then
+  echo "waiting ${LEFT}s for the countdown..."
+  sleep "$LEFT"
+fi
 restart_app
 trap - ERR
 echo "restarted; browsers will reload themselves when the new version answers"
