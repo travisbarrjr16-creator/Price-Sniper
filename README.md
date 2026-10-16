@@ -33,6 +33,7 @@ the whole flow right away.
 | **Scam filter** | A risk score from price far below typical, a brand-new or low-feedback seller, a rating under 95%, and payment red flags ("zelle only", "shipping only", gift cards…). Risky listings are hidden by default and labeled "Too good to be true". |
 | **Is this a deal?** | Each listing is compared to the median total of every non-risky listing seen in the last 30 days, with new and used tracked separately. Labels: Great (≤ −15%), Good, Typical, Above typical. A chart shows the lowest price over time. |
 | **Alerts** | Sent when a listing is **new or cut in price** and either **beats the current lowest** or is **under your max**. The first scan sends one summary alert, not a flood. Delivered through ntfy (phone push), Discord, browser notifications, and in-app toasts. |
+| **Browse deals** | A 🛍 tab with fresh deals and for-sale posts from r/buildapcsales, r/hardwareswap, r/homelabsales, r/appleswap and r/gamesale, with no watch needed. Filter by category (GPU, CPU, RAM…), search, max price, or site. **＋ Watch this** turns any deal into a watch. One shared fetch every 10 minutes (6 Reddit calls), so it costs the same for 1 user or 6. Shows sample deals until Reddit keys are added. |
 | **One-tap open** | Every result and every push notification links straight to the listing. On a phone, eBay/Best Buy links open in their apps. |
 
 ## Day-to-day tools

@@ -15,13 +15,15 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from . import budget, maintenance, scoring
+from .browse import Browser, filter_items
+from .browse import iso as browse_iso
 from .alerts import valid_discord_webhook, valid_ntfy_topic
 from .db import DB
 from .models import CONDITIONS, User, Watch, utcnow
@@ -135,6 +137,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     gmail_source = get_source("gmail")
     if gmail_source:
         gmail_source.db = db
+    browser = Browser(db, get_source("reddit"))
     boot_id = secrets.token_hex(8)   # changes on every restart, so browsers know a new version is up
     oauth_states: dict[str, tuple[int, float]] = {}
     login_failures: dict[str, list[float]] = defaultdict(list)
@@ -174,7 +177,7 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
                      "script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
                      "form-action 'self'")
         return response
-    app.state.db, app.state.watcher = db, watcher
+    app.state.db, app.state.watcher, app.state.browser = db, watcher, browser
 
     # --- maintenance notice (public: shows on the sign-in screen too) --------
     @app.get("/api/notice")
@@ -523,6 +526,20 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
     def usage(user: User = Depends(current_user)):
         """Shared daily limits per site: used today, and what everyone's watches need per day."""
         return budget.report(db, enabled_sources())
+
+    @app.get("/api/browse")
+    async def browse(category: str = "", source: str = "", q: str = Query("", max_length=100),
+                     max_price: Optional[float] = Query(None, gt=0), sort: str = "new",
+                     user: User = Depends(current_user)):
+        """Fresh deals from the deal subreddits, no watch needed (shared, cached feed)."""
+        items, at, note = await browser.items()
+        counts: dict[str, int] = {}
+        for i in items:
+            counts[i["category"]] = counts.get(i["category"], 0) + 1
+        shown = filter_items(items, category, source, q.strip(), max_price, sort)
+        return {"items": shown[:300], "total": len(shown), "categories": counts,
+                "sources": sorted({i["source"] for i in items}), "updated_at": browse_iso(at),
+                "demo": not browser.live, "note": note}
 
     @app.get("/api/alerts")
     def alerts(since_id: int = 0, user: User = Depends(current_user)):

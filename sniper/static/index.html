@@ -143,6 +143,16 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin
 .watch .newdot { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 99px; background: var(--accent);
   color: var(--accent-ink); font-size: 10px; font-weight: 700; vertical-align: 2px; }
 .welcome { text-align: left; }
+/* tabs: My watches | Browse deals */
+.tabs { display: flex; gap: 6px; max-width: 1280px; margin: 0 auto; padding: 12px 16px 0; }
+.tabs button { border-radius: 99px; padding: 7px 14px; font-weight: 600; min-height: 38px; }
+.tabs button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chips button { border-radius: 99px; padding: 4px 11px; font-size: 13px; min-height: 32px; }
+.chips button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chips .n { opacity: .75; font-size: 11px; margin-left: 3px; }
+.browse-note { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13px; color: var(--text-2); }
+#bQ { flex: 1 1 180px; min-width: 0; } #bMax { width: 110px; } #bSrc, #bSort { width: auto; }
 .welcome h2 { font-size: 18px; text-transform: none; letter-spacing: 0; color: var(--text); margin: 0 0 6px; }
 .welcome ol { margin: 8px 0 14px; padding-left: 20px; color: var(--text-2); line-height: 1.8; }
 .welcome .ex { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -289,6 +299,10 @@ table.hist th:first-child, table.hist td:first-child { text-align: left; }
   </form>
 </dialog>
 
+<nav class="tabs" aria-label="Sections">
+  <button type="button" id="tabWatches" aria-pressed="true">🎯 My watches</button>
+  <button type="button" id="tabBrowse" aria-pressed="false">🛍 Browse deals</button>
+</nav>
 <div class="layout">
   <aside class="stack">
     <div class="card">
@@ -363,7 +377,7 @@ const SITE_ABBR = {"eBay": "eB", "eBay Local": "eB", "Best Buy": "BB", "Walmart"
 const COND = {new: "New", open_box: "Open box", refurbished: "Refurb", used: "Used", parts: "For parts"};
 const DEAL = {great: "Great deal", good: "Good price", fair: "Typical price", high: "Above typical", suspicious: "Too good to be true"};
 let state = {q: "", compact: (() => { try { return localStorage.getItem("compact") === "1"; } catch { return false; } })(),
-  watches: [], sel: null, sort: "total", showHidden: false, showMine: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
+  watches: [], sel: null, sort: "total", view: "watches", b: {category: "", source: "", q: "", max: "", sort: "new"}, browseItems: [], showHidden: false, showMine: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
 try { state.sort = localStorage.getItem("sort") || "total"; } catch {}
 
 const api = async (path, opts = {}) => {
@@ -410,7 +424,7 @@ $("#f").addEventListener("submit", async e => {
       state.sel = editing.id; toast("Saved. Changes apply from the next check.");
     } else {
       const w = await api("/api/watches", {method: "POST", body: JSON.stringify(body)});
-      state.sel = w.id; state.site = "";
+      state.sel = w.id; state.site = ""; state.view = "watches"; syncTabs();
       if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
     }
     endEdit(); await refresh();
@@ -427,6 +441,91 @@ function endEdit() {
 }
 $("#cancelEdit").onclick = endEdit;
 
+// --- Browse deals: a shared feed from the deal subreddits, no watch needed ---------------
+function syncTabs() {
+  $("#tabWatches").setAttribute("aria-pressed", state.view === "watches");
+  $("#tabBrowse").setAttribute("aria-pressed", state.view === "browse");
+}
+function showView(v) {
+  state.view = v; syncTabs();
+  if (v === "browse") renderBrowse(true);
+  else if (state.sel) renderMain();
+  else $("#main").innerHTML = EMPTY_MAIN;
+}
+$("#tabWatches").onclick = () => showView("watches");
+$("#tabBrowse").onclick = () => showView("browse");
+
+const BROWSE_SORTS = {new: "Newest", price: "Cheapest"};
+async function renderBrowse(fresh = false) {
+  const b = state.b, p = new URLSearchParams({category: b.category, source: b.source, q: b.q, sort: b.sort});
+  if (b.max) p.set("max_price", b.max);
+  let r;
+  try { r = await api("/api/browse?" + p); } catch (err) { $("#main").innerHTML = `<div class="card err">${esc(err.message)}</div>`; return; }
+  if (state.view !== "browse") return;
+  state.browseItems = r.items;
+  const main = $("#main");
+  if (fresh || !$("#browse")) {            // build the controls once, so typing in the search box keeps focus
+    main.innerHTML = `<div class="card" id="browse">
+      <div style="font-size:18px;font-weight:650">🛍 Browse deals</div>
+      <div class="filtered" id="bInfo"></div>
+      <div id="bNote"></div>
+      <div class="chips" id="bCats" role="group" aria-label="Category"></div>
+      <div class="toolbar" style="margin-top:10px">
+        <input id="bQ" type="search" placeholder="Search these deals" aria-label="Search these deals" value="${esc(b.q)}">
+        <input id="bMax" type="number" min="1" step="1" inputmode="numeric" placeholder="Max $" aria-label="Max price" value="${esc(b.max)}">
+        <select id="bSrc" aria-label="Where from"></select>
+        <select id="bSort" aria-label="Sort">${Object.entries(BROWSE_SORTS).map(([k, v]) => `<option value="${k}" ${k === b.sort ? "selected" : ""}>${v}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div class="card"><div class="list" id="bList"></div></div>`;
+    let t;
+    $("#bQ").oninput = e => { clearTimeout(t); t = setTimeout(() => { b.q = e.target.value.trim(); renderBrowse(); }, 300); };
+    $("#bMax").oninput = e => { clearTimeout(t); t = setTimeout(() => { b.max = e.target.value; renderBrowse(); }, 400); };
+    $("#bSrc").onchange = e => { b.source = e.target.value; renderBrowse(); };
+    $("#bSort").onchange = e => { b.sort = e.target.value; renderBrowse(); };
+  }
+  $("#bInfo").textContent = `Fresh deals and for-sale posts from deal communities · updated ${ago(r.updated_at)} · no watch needed`;
+  $("#bNote").innerHTML = (r.demo ? '<div class="browse-note">These are <b>sample deals</b>. Add your Reddit keys (see SITE_KEYS.md) to see real ones.</div>' : "")
+    + (r.note ? `<div class="browse-note">${esc(r.note)}</div>` : "");
+  const cats = Object.entries(r.categories).sort((x, y) => y[1] - x[1]);
+  const all = cats.reduce((n, [, c]) => n + c, 0);
+  $("#bCats").innerHTML = [["", "All", all], ...cats.map(([c, n]) => [c, c, n])].map(([val, label, n]) =>
+    `<button type="button" data-cat="${esc(val)}" aria-pressed="${val === b.category}">${esc(label)}<span class="n">${n}</span></button>`).join("");
+  $("#bCats").querySelectorAll("[data-cat]").forEach(x => x.onclick = () => { b.category = x.dataset.cat; renderBrowse(); });
+  $("#bSrc").innerHTML = `<option value="">Everywhere</option>` + r.sources.map(s => `<option ${s === b.source ? "selected" : ""}>${esc(s)}</option>`).join("");
+  $("#bList").innerHTML = r.items.length ? r.items.map((i, n) => `<div class="item">
+      <div class="ph" aria-hidden="true">${i.source.startsWith("r/") ? "r/" : "De"}</div>
+      <div>
+        <div class="t">${esc(i.title)}</div>
+        <div class="m"><span><b>${esc(i.source)}</b></span><span>${COND[i.condition] || esc(i.condition)}</span><span>${esc(i.category)}</span>
+          ${i.store ? `<span>at ${esc(i.store)}</span>` : ""}${i.location ? `<span>📍 ${esc(i.location)}</span>` : ""}</div>
+        <div class="found">posted ${ago(new Date(i.created * 1000).toISOString())}</div>
+        <div class="acts"><button type="button" data-bwatch="${n}" title="Fill in the New watch form with this item">＋ Watch this</button></div>
+      </div>
+      <div class="price">
+        <div><div class="total">${i.price != null ? (i.price_note ? '<span class="bd">from </span>' : "") + money(i.price) : '<span class="bd">price in post</span>'}</div>
+        <div class="bd">${i.condition === "used" ? "seller's price" : "+ tax, shipping varies"}</div></div>
+        <a class="open" href="${esc(i.url)}" target="_blank" rel="noopener">Open ↗</a>
+      </div></div>`).join("")
+    : '<div class="empty">Nothing matches. Try another category or clear the search.</div>';
+  $("#bList").querySelectorAll("[data-bwatch]").forEach(x => x.onclick = () => watchFromBrowse(state.browseItems[+x.dataset.bwatch]));
+}
+// "MSI RTX 4060 Ventus 2X 8GB (Newegg) - free shipping" -> "MSI RTX 4060 Ventus 2X 8GB"
+function browseQuery(title) {
+  let q = title.replace(/\([^)]*\)|\[[^\]]*\]/g, " ").split(/\s[-–|]\s|,|\sw\/|\swith\s|\+/i)[0];
+  return q.trim().split(/\s+/).slice(0, 7).join(" ");
+}
+function watchFromBrowse(i) {
+  if (!i) return;
+  endEdit();
+  const f = $("#f");
+  f.query.value = browseQuery(i.title);
+  f.max_price.value = i.price != null ? Math.ceil(i.price) : "";
+  f.scrollIntoView({behavior: "smooth", block: "start"});
+  f.query.focus({preventScroll: true});
+  toast("Filled in the New watch form. Shorten the name if you like, then Start watching.");
+}
+
 const EMPTY_MAIN = `<div class="card welcome">
   <h2>👋 Start your first watch</h2>
   <ol>
@@ -434,11 +533,13 @@ const EMPTY_MAIN = `<div class="card welcome">
     <li>Set your <b>max total</b> (price + shipping + tax) and an optional 🎯 target.</li>
     <li>Add your ZIP and radius to include local pickup deals.</li>
   </ol>
+  <p style="margin:0 0 10px;color:var(--text-2)">Just looking? Open <button type="button" class="linkbtn" data-goto-browse>🛍 Browse deals</button> to scroll today's deals, no watch needed.</p>
   <div class="hint" style="margin-bottom:6px">Try one:</div>
   <div class="ex">${["RTX 4060", "RTX 4070 Super", "DDR5 2x16 6400", "Ryzen 7 7800X3D", "2TB NVMe SN850X"]
     .map(q => `<button type="button" data-example="${q}">${q}</button>`).join("")}</div>
 </div>`;
 document.addEventListener("click", e => {
+  if (e.target.closest("[data-goto-browse]")) { showView("browse"); return; }
   const q = e.target.closest("[data-example]")?.dataset.example;
   if (!q) return;
   const f = $("#f"); f.query.value = q; f.max_price.focus();
@@ -450,7 +551,8 @@ async function refresh() {
   // the selected watch may have been deleted (here or in another tab)
   if (!state.watches.some(w => w.id === state.sel)) { state.sel = state.watches[0]?.id ?? null; state.site = ""; }
   renderWatches();
-  if (state.sel) await renderMain();
+  if (state.view === "browse") await renderBrowse();
+  else if (state.sel) await renderMain();
   else $("#main").innerHTML = EMPTY_MAIN;
 }
 
@@ -462,7 +564,7 @@ function renderWatches() {
       <div class="q">${esc(w.query)}${w.active ? "" : " (paused)"}${w.latest_found && w.id !== state.sel && (!lastSeen.get(w.id) || w.latest_found > lastSeen.get(w.id)) ? '<span class="newdot">NEW</span>' : ""}</div>
       <div class="meta">${w.count} listings · lowest ${money(w.lowest)}${w.max_price ? ` · max $${w.max_price}` : ""}</div>
     </div>`).join("");
-  el.querySelectorAll(".watch").forEach(d => d.onclick = () => { state.sel = +d.dataset.id; state.site = ""; renderWatches(); renderMain(); });
+  el.querySelectorAll(".watch").forEach(d => d.onclick = () => { state.sel = +d.dataset.id; state.site = ""; showView("watches"); renderWatches(); });
 }
 
 async function renderMain() {
@@ -829,7 +931,9 @@ $("#authForm").addEventListener("submit", async e => {
 });
 $("#logoutBtn").onclick = async () => {
   await api("/api/auth/logout", {method: "POST"}).catch(() => {});
-  state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: "", showMine: false, showHidden: false};
+  state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: "", showMine: false, showHidden: false,
+    view: "watches", b: {category: "", source: "", q: "", max: "", sort: "new"}, browseItems: []};
+  syncTabs();
   $("#main").innerHTML = EMPTY_MAIN; $("#watches").innerHTML = '<div class="empty">Nothing yet.</div>';
   setAuthMode(false);        // come back to "Sign in", not "Create account"
   document.title = "Price Sniper";
