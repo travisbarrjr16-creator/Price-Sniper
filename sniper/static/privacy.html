@@ -22,6 +22,7 @@ p, li { color: var(--text-2); } a { color: var(--accent); } ul { padding-left: 2
 <ul>
   <li><b>Your account:</b> your email and your password, stored only as a scrambled hash that can't be turned back into the password.</li>
   <li><b>Your watches and their results:</b> what you search for, your price limits, ZIP code and radius, and the public listings the app found for you.</li>
+  <li><b>Your meal plan:</b> the meals you add, their calories and protein, and your daily goals. Photos you snap are <b>not</b> stored.</li>
   <li><b>Your settings:</b> ntfy topic, Discord webhook, quiet hours, muted sellers, hidden listings.</li>
   <li><b>Gmail (only if you connect it):</b> a read-only access key, stored encrypted. The app only reads marketplace alert emails (Craigslist, OfferUp, …) to find listings. It never sends, deletes, or changes email.</li>
 </ul>
@@ -37,6 +38,7 @@ p, li { color: var(--text-2); } a { color: var(--accent); } ul { padding-left: 2
   <li><b>Marketplaces</b> (eBay, Best Buy, Reddit, …) get your search words, and for eBay local pickup, your ZIP code and radius. They don't get your name or email.</li>
   <li><b>ntfy / Discord</b> get the text of your deal alerts, if you set them up.</li>
   <li><b>Google</b> is involved only if you connect Gmail.</li>
+  <li><b>Anthropic</b> (the maker of Claude) gets each photo you take in 📷 Snap, to say what's in it. Only the photo is sent, not your name or email. Anthropic's own policy covers how long it keeps it.</li>
   <li><b>DuckDuckGo's icon service</b> sends your browser the little store logos (Newegg, Amazon, …). It only sees the store's web address, never what you searched for or who you are.</li>
 </ul>
 <p>Listing details such as titles, prices, and seller names come from those marketplaces' public listings and belong to them. Tap <b>Open ↗</b> to buy on the marketplace itself.</p>

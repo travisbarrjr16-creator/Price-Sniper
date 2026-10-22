@@ -12,7 +12,7 @@ something good shows up.
 ## Quick start
 
 ```bash
-pip install -e .            # or: pip install fastapi uvicorn httpx cryptography
+pip install -e .            # or: pip install fastapi uvicorn httpx cryptography anthropic
 cp .env.example .env        # add keys (optional; see below)
 uvicorn sniper.app:app --port 8000
 # open http://localhost:8000
@@ -35,6 +35,22 @@ the whole flow right away.
 | **Alerts** | Sent when a listing is **new or cut in price** and either **beats the current lowest** or is **under your max**. The first scan sends one summary alert, not a flood. Delivered through ntfy (phone push), Discord, browser notifications, and in-app toasts. |
 | **Browse deals** | A 🛍 tab with fresh deals and for-sale posts from r/buildapcsales, r/hardwareswap, r/homelabsales, r/appleswap and r/gamesale, with no watch needed. Filter by category (GPU, CPU, RAM…), search, max price, or site. **＋ Watch this** turns any deal into a watch. One shared fetch every 10 minutes (6 Reddit calls), so it costs the same for 1 user or 6. Shows sample deals until Reddit keys are added. |
 | **One-tap open** | Every result and every push notification links straight to the listing. On a phone, eBay/Best Buy links open in their apps. |
+
+## 📷 Snap and 🍽 Meals
+
+- **📷 Snap → "What is it & where's it cheapest?"** Take or choose a photo. The app names the item (brand and model
+  when it can read them), shows the typical new and used price, a 💡 *cheapest bet*, and 3–6 places to buy it, cheapest
+  first. Each place has a **Search ↗** link to that store. **🎯 Watch for the lowest price** fills in the New watch form,
+  so live prices from every source keep coming in.
+- **📷 Snap → "Food: calories & protein".** Take a picture of your plate (a steak, say). You get calories, protein, carbs
+  and fat, broken down per food, plus **＋ Add** to put it on your meal plan with servings, day and meal.
+- **🍽 Meals.** A week planner (Mon–Sun) with breakfast, lunch, dinner and snacks. Add meals by hand or from a photo,
+  check them off as you eat, and set daily calorie and protein goals to get progress bars. Undo works when you remove a meal.
+
+Photos are read by Claude through the Anthropic API: put `ANTHROPIC_API_KEY` in `.env`. Without a key, Snap shows
+clearly labelled sample answers. Each person gets `SNIPER_VISION_DAILY` photos a day (default 60). Photos are shrunk
+on the phone before upload and aren't stored. Prices and nutrition are estimates from the picture, not live prices or
+lab values.
 
 ## Day-to-day tools
 
@@ -170,6 +186,8 @@ From CI or another machine: set `SNIPER_ADMIN_TOKEN`, then
 `GET/POST /api/watches` · `PUT/DELETE /api/watches/{id}` · `POST /api/watches/{id}/check`
 · `GET /api/watches/{id}/listings?sort=total|value|distance|newest&site=Walmart&include_hidden=`
 · `GET /api/watches/{id}/history` · `GET /api/alerts?since_id=` · `GET /api/sources`
+· `POST /api/snap` (`{image: base64, media_type, mode: item|food}`) · `GET /api/meals?start=YYYY-MM-DD&days=7`
+· `POST /api/meals` · `PUT/DELETE /api/meals/{id}` · `PUT /api/meal-goals`
 
 ## Tests
 
@@ -186,6 +204,7 @@ sniper/
   scoring.py    total cost, risk score, best value, deal rating
   watcher.py    background polling, history, alert decisions
   alerts.py     ntfy + Discord
+  vision.py     📷 Snap: photo -> item + where to buy, or food -> nutrition (Anthropic API)
   db.py         SQLite
   app.py        FastAPI + serves static/index.html
   security.py   password hashing, sessions, token encryption

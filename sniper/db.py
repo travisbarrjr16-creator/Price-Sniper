@@ -92,6 +92,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS meals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    day TEXT NOT NULL,            -- the person's own date, e.g. 2026-10-22
+    slot TEXT NOT NULL,           -- breakfast / lunch / dinner / snack
+    name TEXT NOT NULL,
+    servings REAL NOT NULL DEFAULT 1,
+    calories REAL NOT NULL,       -- per serving
+    protein_g REAL NOT NULL,
+    carbs_g REAL,
+    fat_g REAL,
+    eaten INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_meals ON meals(user_id, day);
 CREATE INDEX IF NOT EXISTS idx_snapshots ON snapshots(watch_id, ts);
 """
 
@@ -366,10 +381,48 @@ class DB:
         for w in self.list_watches(uid):
             self.delete_watch(w.id)
         with self.lock, self.conn:
-            for t in ("sessions", "password_resets", "user_hidden"):
+            for t in ("sessions", "password_resets", "user_hidden", "meals"):
                 self.conn.execute(f"DELETE FROM {t} WHERE user_id=?", (uid,))
             self.conn.execute("DELETE FROM users WHERE id=?", (uid,))
-            self.conn.execute("DELETE FROM app_settings WHERE key=?", (f"push_error:{uid}",))
+            for key in (f"push_error:{uid}", f"meal_goals:{uid}"):
+                self.conn.execute("DELETE FROM app_settings WHERE key=?", (key,))
+
+    # --- meal planner --------------------------------------------------------
+    MEAL_FIELDS = ("day", "slot", "name", "servings", "calories", "protein_g", "carbs_g", "fat_g", "eaten")
+
+    def list_meals(self, uid: int, start: str, end: str) -> list[dict]:
+        """Meals from start to end (inclusive, YYYY-MM-DD)."""
+        rows = self._read("SELECT * FROM meals WHERE user_id=? AND day BETWEEN ? AND ? ORDER BY day, id", (uid, start, end))
+        return [{k: r[k] for k in ("id", *self.MEAL_FIELDS)} | {"eaten": bool(r["eaten"])} for r in rows]
+
+    def add_meal(self, uid: int, meal: dict) -> int:
+        with self.lock, self.conn:
+            cur = self.conn.execute(
+                f"INSERT INTO meals (user_id, {', '.join(self.MEAL_FIELDS)}, created_at) "
+                f"VALUES (?, {', '.join('?' * len(self.MEAL_FIELDS))}, ?)",
+                (uid, *(meal[k] for k in self.MEAL_FIELDS), utcnow().isoformat()))
+            return cur.lastrowid
+
+    def update_meal(self, uid: int, mid: int, meal: dict) -> bool:
+        with self.lock, self.conn:
+            cur = self.conn.execute(
+                f"UPDATE meals SET {', '.join(k + '=?' for k in self.MEAL_FIELDS)} WHERE id=? AND user_id=?",
+                (*(meal[k] for k in self.MEAL_FIELDS), mid, uid))
+            return cur.rowcount > 0
+
+    def delete_meal(self, uid: int, mid: int) -> bool:
+        with self.lock, self.conn:
+            return self.conn.execute("DELETE FROM meals WHERE id=? AND user_id=?", (mid, uid)).rowcount > 0
+
+    def count_meals(self, uid: int) -> int:
+        return self._read_one("SELECT COUNT(*) AS n FROM meals WHERE user_id=?", (uid,))["n"]
+
+    def meal_goals(self, uid: int) -> dict:
+        raw = self.get_setting(f"meal_goals:{uid}")
+        return json.loads(raw) if raw else {"calories": None, "protein_g": None}
+
+    def set_meal_goals(self, uid: int, goals: dict) -> None:
+        self.set_setting(f"meal_goals:{uid}", json.dumps(goals))
 
     # --- listings ----------------------------------------------------------
     def get_listing_rows(self, wid: int, active_only: bool = True) -> list[sqlite3.Row]:
