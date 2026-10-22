@@ -294,50 +294,6 @@ button.primary:hover { background: var(--accent-hover); border-color: var(--acce
 .list { gap: 10px; }
 .welcome h2 { color: var(--text); }
 .auth-card .brand { font-size: 22px; }
-/* 📷 Snap + 🍽 Meals */
-.tabs .short { display: none; }
-@media (max-width: 520px) { .tabs .long { display: none; } .tabs .short { display: inline; } .tabs button { padding: 7px 10px; } }
-.snap-title { font-size: 18px; font-weight: 650; }
-.snap-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.snap-btns button { min-height: 48px; padding: 10px 18px; font-size: 15px; }
-.snap-prev { margin-top: 12px; display: flex; gap: 12px; align-items: center; }
-.snap-prev img { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); }
-.snap-res h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; overflow-wrap: anywhere; }
-.snap-res p { margin: 6px 0 0; color: var(--text-2); }
-.snap-res .tiles { margin-top: 12px; }
-.bet { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--good-bg); color: var(--good); font-weight: 600; }
-.places { display: grid; gap: 8px; margin-top: 12px; }
-.place { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
-.place .n { font-weight: 650; }
-.place .s { font-size: 12.5px; color: var(--text-2); }
-.place .pr { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-.place a { font-size: 13px; font-weight: 600; color: var(--link); }
-.parts { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
-.parts td, .parts th { padding: 5px 6px; border-bottom: 1px solid var(--border); text-align: right; }
-.parts td:first-child, .parts th:first-child { text-align: left; overflow-wrap: anywhere; }
-.form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); gap: 8px; align-items: end; margin-top: 10px; }
-.form-row label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 3px; }
-.week-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
-.week-nav .wk { font-weight: 650; margin: 0 4px; }
-.day { margin-top: 0; }
-.day.today { box-shadow: inset 3px 0 0 var(--accent), var(--shadow); }
-.day-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; }
-.day-head .d { font-weight: 700; font-size: 15px; }
-.day-head .sum { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
-.bar { height: 6px; border-radius: 99px; background: var(--neutral-bg); overflow: hidden; margin-top: 4px; }
-.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
-.bar.over > i { background: var(--orange-line); }
-.bars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
-.slot { margin-top: 10px; }
-.slot .sl { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 650; }
-.meal { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
-.meal:last-child { border-bottom: 0; }
-.meal .mn { overflow-wrap: anywhere; }
-.meal.eaten .mn { color: var(--text-2); }
-.meal .mv { font-size: 12.5px; color: var(--text-2); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.meal input[type=checkbox] { width: 20px; height: 20px; margin: 0; }
-.meal button { padding: 3px 9px; min-height: 30px; }
-.add-slot { font-size: 12.5px; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -425,10 +381,8 @@ button.primary:hover { background: var(--accent-hover); border-color: var(--acce
 </dialog>
 
 <nav class="tabs" aria-label="Sections">
-  <button type="button" id="tabWatches" aria-pressed="true">🎯 <span class="long">My watches</span><span class="short">Watches</span></button>
-  <button type="button" id="tabBrowse" aria-pressed="false">🛍 <span class="long">Browse deals</span><span class="short">Deals</span></button>
-  <button type="button" id="tabSnap" aria-pressed="false">📷 Snap</button>
-  <button type="button" id="tabMeals" aria-pressed="false">🍽 Meals</button>
+  <button type="button" id="tabWatches" aria-pressed="true">🎯 My watches</button>
+  <button type="button" id="tabBrowse" aria-pressed="false">🛍 Browse deals</button>
 </nav>
 <div class="layout">
   <aside class="stack">
@@ -544,8 +498,7 @@ document.addEventListener("error", e => {
 const COND = {new: "New", open_box: "Open box", refurbished: "Refurb", used: "Used", parts: "For parts"};
 const DEAL = {great: "Great deal", good: "Good price", fair: "Typical price", high: "Above typical", suspicious: "Too good to be true"};
 let state = {q: "", compact: (() => { try { return localStorage.getItem("compact") === "1"; } catch { return false; } })(),
-  watches: [], sel: null, sort: "total", view: "watches", b: {category: "", source: "", q: "", max: "", sort: "new"}, browseItems: [],
-  snap: {mode: "item", photo: null, result: null, busy: false}, meals: {start: null, data: null}, showHidden: false, showMine: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
+  watches: [], sel: null, sort: "total", view: "watches", b: {category: "", source: "", q: "", max: "", sort: "new"}, browseItems: [], showHidden: false, showMine: false, lastAlert: null, site: "", me: null, sources: [], timers: []};
 try { state.sort = localStorage.getItem("sort") || "total"; } catch {}
 
 const api = async (path, opts = {}) => {
@@ -625,20 +578,18 @@ function endEdit() {
 $("#cancelEdit").onclick = endEdit;
 
 // --- Browse deals: a shared feed from the deal subreddits, no watch needed ---------------
-const VIEWS = {watches: "#tabWatches", browse: "#tabBrowse", snap: "#tabSnap", meals: "#tabMeals"};
 function syncTabs() {
-  for (const [v, id] of Object.entries(VIEWS)) $(id).setAttribute("aria-pressed", state.view === v);
+  $("#tabWatches").setAttribute("aria-pressed", state.view === "watches");
+  $("#tabBrowse").setAttribute("aria-pressed", state.view === "browse");
 }
 function showView(v, push = true) {
   if (push && v !== state.view) { try { history.pushState({view: v}, ""); } catch {} }
   state.view = v; syncTabs();
   if (v === "browse") renderBrowse(true);
-  else if (v === "snap") renderSnap();
-  else if (v === "meals") renderMeals(true);
   else if (state.sel) renderMain();
   else $("#main").innerHTML = EMPTY_MAIN;
 }
-const startView = VIEWS[history.state?.view] ? history.state.view : "watches";
+const startView = history.state?.view === "browse" ? "browse" : "watches";
 try { history.replaceState({view: startView}, ""); } catch {}
 addEventListener("popstate", e => {
   const open = document.querySelector("dialog[open]");
@@ -654,8 +605,6 @@ for (const id of ["settings", "alertsDlg"]) {
 }
 $("#tabWatches").onclick = () => showView("watches");
 $("#tabBrowse").onclick = () => showView("browse");
-$("#tabSnap").onclick = () => showView("snap");
-$("#tabMeals").onclick = () => showView("meals");
 
 const BROWSE_SORTS = {new: "Newest", price: "Cheapest"};
 let browseSeq = 0;
@@ -737,295 +686,6 @@ function watchFromBrowse(i) {
   toast("Filled in the New watch form. Shorten the name if you like, then Start watching.");
 }
 
-
-// --- 📷 Snap: photo -> what it is + where it's cheapest, or food -> calories & protein -----------
-const SNAP_MODES = {item: "🔎 What is it & where's it cheapest?", food: "🍽 Food: calories & protein"};
-const KIND = {online: "Online", in_store: "In store", both: "Online & in store", used: "Used"};
-const priceRange = (lo, hi) => lo == null && hi == null ? "" : lo != null && hi != null && Math.round(lo) !== Math.round(hi)
-  ? `${dollars(lo)}–${dollars(hi)}` : dollars(lo ?? hi);
-const num = v => v == null ? "—" : Math.round(v).toLocaleString();
-// A store's own search page for this item (falls back to a Google Shopping search for that store)
-const STORE_SEARCH = {
-  "walmart": q => `https://www.walmart.com/search?q=${q}&sort=price_low`, "amazon": q => `https://www.amazon.com/s?k=${q}`,
-  "ebay": q => `https://www.ebay.com/sch/i.html?_nkw=${q}&_sop=15`, "target": q => `https://www.target.com/s?searchTerm=${q}`,
-  "best buy": q => `https://www.bestbuy.com/site/searchpage.jsp?st=${q}`, "newegg": q => `https://www.newegg.com/p/pl?d=${q}`,
-  "home depot": q => `https://www.homedepot.com/s/${q}`, "lowe": q => `https://www.lowes.com/search?searchTerm=${q}`,
-  "costco": q => `https://www.costco.com/CatalogSearch?keyword=${q}`, "facebook": q => `https://www.facebook.com/marketplace/search/?query=${q}`,
-  "offerup": q => `https://offerup.com/search?q=${q}`, "mercari": q => `https://www.mercari.com/search/?keyword=${q}`,
-  "craigslist": q => `https://www.craigslist.org/search/sss?query=${q}`, "etsy": q => `https://www.etsy.com/search?q=${q}`,
-  "aliexpress": q => `https://www.aliexpress.us/w/wholesale-${q}.html`, "temu": q => `https://www.temu.com/search_result.html?search_key=${q}`,
-  "kroger": q => `https://www.kroger.com/search?query=${q}`, "aldi": q => `https://www.aldi.us/results?q=${q}`,
-  "sam's club": q => `https://www.samsclub.com/s/${q}`, "dick's": q => `https://www.dickssportinggoods.com/search/SearchDisplay?searchTerm=${q}`,
-};
-function storeSearch(store, query) {
-  const k = Object.keys(STORE_SEARCH).find(k => store.toLowerCase().includes(k));
-  return k ? STORE_SEARCH[k](encodeURIComponent(query)) : `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(store + " " + query)}`;
-}
-function renderSnap() {
-  const sn = state.snap;
-  $("#main").innerHTML = `<div class="card">
-      <div class="snap-title">📷 Snap it</div>
-      <div class="hint">Take a picture of something to find out what it is and where it's likely cheapest, or of your food to see its calories and protein.</div>
-      <div class="chips" role="group" aria-label="What should the photo tell you?">${Object.entries(SNAP_MODES).map(([k, v]) =>
-        `<button type="button" data-snapmode="${k}" aria-pressed="${k === sn.mode}">${v}</button>`).join("")}</div>
-      <div class="snap-btns">
-        <button type="button" class="primary" id="snapCam">📷 Take a photo</button>
-        <button type="button" id="snapLib">🖼 Choose a photo</button>
-        <input type="file" id="snapCamIn" accept="image/*" capture="environment" hidden>
-        <input type="file" id="snapLibIn" accept="image/*" hidden>
-      </div>
-      <div id="snapPrev"></div>
-    </div>
-    <div id="snapOut"></div>`;
-  $("#main").querySelectorAll("[data-snapmode]").forEach(b => b.onclick = () => {
-    sn.mode = b.dataset.snapmode;
-    $("#main").querySelectorAll("[data-snapmode]").forEach(x => x.setAttribute("aria-pressed", x === b));
-    if (sn.photo && !sn.busy) runSnap();          // same photo, other question
-  });
-  $("#snapCam").onclick = () => $("#snapCamIn").click();
-  $("#snapLib").onclick = () => $("#snapLibIn").click();
-  for (const id of ["#snapCamIn", "#snapLibIn"]) $(id).onchange = async e => {
-    const file = e.target.files[0]; e.target.value = "";
-    if (!file) return;
-    try { sn.photo = await shrinkPhoto(file); }
-    catch { $("#snapOut").innerHTML = `<div class="card"><div class="err">That photo couldn't be opened. Try a JPEG or PNG.</div></div>`; return; }
-    runSnap();
-  };
-  showSnapPreview();
-  if (sn.result) showSnapResult();
-}
-// Phone photos are huge: send a 1568px JPEG (what the vision model uses anyway), so it uploads fast.
-async function shrinkPhoto(file) {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 1568 / Math.max(bmp.width, bmp.height));
-  const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
-  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-  bmp.close?.();
-  return c.toDataURL("image/jpeg", 0.85);
-}
-function showSnapPreview() {
-  const sn = state.snap, el = $("#snapPrev");
-  if (!el) return;
-  el.innerHTML = sn.photo ? `<div class="snap-prev"><img src="${sn.photo}" alt="Your photo"><div class="hint">${sn.busy
-    ? "Looking at your photo… (a few seconds)" : "Tap the other choice above to ask about this photo the other way."}</div></div>` : "";
-}
-let snapSeq = 0;
-async function runSnap() {
-  const sn = state.snap, seq = ++snapSeq;
-  sn.busy = true; sn.result = null; showSnapPreview();
-  if ($("#snapOut")) $("#snapOut").innerHTML = "";
-  try {
-    const r = await api("/api/snap", {method: "POST", body: JSON.stringify(
-      {image: sn.photo.split(",")[1], media_type: "image/jpeg", mode: sn.mode})});
-    if (seq !== snapSeq) return;
-    sn.result = {...r, mode: sn.mode};
-  } catch (err) {
-    if (seq !== snapSeq) return;
-    sn.result = {error: err.message};
-  }
-  sn.busy = false;
-  if (state.view === "snap") { showSnapPreview(); showSnapResult(); }
-}
-function showSnapResult() {
-  const r = state.snap.result, out = $("#snapOut");
-  if (!out || !r) return;
-  if (r.error) { out.innerHTML = `<div class="card"><div class="err">${esc(r.error)}</div></div>`; return; }
-  const demo = r.demo ? '<div class="browse-note">This is a <b>sample answer</b>. Add <code>ANTHROPIC_API_KEY</code> to .env to analyze real photos.</div>' : "";
-  const conf = `<span class="badge ${r.confidence === "high" ? "good" : r.confidence === "low" ? "high" : ""}">${esc(r.confidence)} confidence</span>`;
-  if (r.mode === "food") {
-    if (!r.is_food) {
-      out.innerHTML = `<div class="card">${demo}<div class="snap-res"><h3>That doesn't look like food</h3>
-        <p>Want to know what it is instead?</p><div class="snap-btns"><button type="button" data-snapswitch="item">🔎 What is it?</button></div></div></div>`;
-    } else {
-      const slot = (h => h < 10 ? "breakfast" : h < 15 ? "lunch" : h < 21 ? "dinner" : "snack")(new Date().getHours());
-      out.innerHTML = `<div class="card snap-res">${demo}
-        <h3>${esc(r.name)}</h3><p>${esc(r.serving)} ${conf}</p>
-        <div class="tiles">
-          <div class="tile"><div class="k">Calories</div><div class="v">${num(r.calories)}</div></div>
-          <div class="tile"><div class="k">Protein</div><div class="v">${num(r.protein_g)} g</div></div>
-          <div class="tile"><div class="k">Carbs</div><div class="v">${num(r.carbs_g)} g</div></div>
-          <div class="tile"><div class="k">Fat</div><div class="v">${num(r.fat_g)} g</div></div>
-        </div>
-        ${r.parts?.length > 1 ? `<table class="parts"><tr><th>Food</th><th>Amount</th><th>Calories</th><th>Protein</th></tr>${r.parts.map(p =>
-          `<tr><td>${esc(p.name)}</td><td>${esc(p.amount)}</td><td>${num(p.calories)}</td><td>${num(p.protein_g)} g</td></tr>`).join("")}</table>` : ""}
-        <p class="hint">${esc(r.notes)} Numbers are estimates from a photo.</p>
-      </div>
-      <div class="card"><h2>Add to meal plan</h2>
-        <form id="snapAdd" class="form-row">
-          <div><label>Name</label><input name="mname" maxlength="120" required value="${esc(r.name.replace(/^Sample: /, ""))}"></div>
-          <div><label>Day</label><input name="day" type="date" required value="${ymd(new Date())}"></div>
-          <div><label>Meal</label><select name="slot">${MEAL_SLOTS.map(s => `<option value="${s}" ${s === slot ? "selected" : ""}>${SLOT_NAMES[s]}</option>`).join("")}</select></div>
-          <div><label>Servings</label><input name="servings" type="number" min="0.25" max="20" step="0.25" value="1" inputmode="decimal"></div>
-          <div><label><input type="checkbox" name="eaten" checked style="width:auto"> Already eaten</label><button class="primary" type="submit">＋ Add</button></div>
-        </form></div>`;
-      $("#snapAdd").onsubmit = async e => {
-        e.preventDefault();
-        const f = e.target, btn = f.querySelector("button");
-        btn.disabled = true;
-        try {
-          await api("/api/meals", {method: "POST", body: JSON.stringify({name: f.mname.value, day: f.day.value, slot: f.slot.value,
-            servings: Number(f.servings.value) || 1, calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, fat_g: r.fat_g,
-            eaten: f.eaten.checked})});
-          toast(`Added to ${esc(SLOT_NAMES[f.slot.value].toLowerCase())}. <button class="linkbtn" type="button" data-goto-meals>See meal plan</button>`);
-        } catch (err) { alert(err.message); }
-        btn.disabled = false;
-      };
-    }
-  } else {
-    const q = r.search_query || r.name;
-    out.innerHTML = `<div class="card snap-res">${demo}
-        <h3>${esc(r.name)}</h3><p>${esc(r.category)} · ${conf}</p><p>${esc(r.description)}</p>
-        ${r.is_food ? `<div class="snap-btns"><button type="button" data-snapswitch="food">🍽 Looks like food: see calories & protein</button></div>` : ""}
-        <div class="tiles">
-          <div class="tile"><div class="k">Typical new price</div><div class="v">${priceRange(r.typical_price_low, r.typical_price_high) || "—"}</div></div>
-          ${r.used_price != null ? `<div class="tile"><div class="k">Used, about</div><div class="v">${dollars(r.used_price)}</div></div>` : ""}
-        </div>
-        <div class="bet">💡 ${esc(r.cheapest_bet)}</div>
-      </div>
-      <div class="card"><h2>Where to find it</h2>
-        <div class="places">${(r.where_to_find || []).map(p => `<div class="place">
-          <div><div class="n">${esc(p.store)} <span class="badge">${KIND[p.kind] || esc(p.kind)}</span></div><div class="s">${esc(p.note)}</div></div>
-          <div class="pr">${priceRange(p.price_low, p.price_high)}<div><a href="${esc(storeSearch(p.store, q))}" target="_blank" rel="noopener">Search ↗</a></div></div>
-        </div>`).join("")}</div>
-        <p class="hint">Prices are typical estimates, not live. For real prices that keep updating, watch it:</p>
-        <div class="snap-btns"><button type="button" class="primary" id="snapWatch">🎯 Watch for the lowest price</button></div>
-        <div class="hint" style="margin-top:12px">Or check each store, cheapest first:</div>
-        <div class="chips">${quickLinks({query: q}).map(([n, u]) => `<a class="badge" style="text-decoration:none;padding:5px 11px" href="${esc(u)}" target="_blank" rel="noopener">${esc(n)} ↗</a>`).join("")}</div>
-      </div>`;
-    $("#snapWatch").onclick = () => {
-      endEdit();
-      const f = $("#f");
-      f.query.value = q;
-      f.max_price.value = r.typical_price_high ? Math.ceil(r.typical_price_high) : "";
-      f.scrollIntoView({behavior: "smooth", block: "start"});
-      f.query.focus({preventScroll: true});
-      toast("Filled in the New watch form. Adjust the max price, then Start watching.");
-    };
-  }
-  out.querySelectorAll("[data-snapswitch]").forEach(b => b.onclick = () => {
-    state.snap.mode = b.dataset.snapswitch;
-    $("#main").querySelectorAll("[data-snapmode]").forEach(x => x.setAttribute("aria-pressed", x.dataset.snapmode === state.snap.mode));
-    runSnap();
-  });
-}
-
-// --- 🍽 Meal planner: a week of meals with calories & protein against your daily goals -----------
-const MEAL_SLOTS = ["breakfast", "lunch", "dinner", "snack"];
-const SLOT_NAMES = {breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snacks"};
-const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const parseYmd = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
-const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-function weekStart(d) { return addDays(d, -((d.getDay() + 6) % 7)); }        // Monday
-let mealSeq = 0;
-async function renderMeals(fresh = false) {
-  const m = state.meals;
-  if (!m.start) m.start = ymd(weekStart(new Date()));
-  const seq = ++mealSeq;
-  let r;
-  try { r = await api(`/api/meals?start=${m.start}&days=7`); }
-  catch (err) { if (seq === mealSeq && state.view === "meals") $("#main").innerHTML = `<div class="card"><div class="empty">${esc(err.message)}</div></div>`; return; }
-  if (seq !== mealSeq || state.view !== "meals") return;
-  m.data = r;
-  const start = parseYmd(m.start), today = ymd(new Date()), g = r.goals || {};
-  const fmtDay = d => d.toLocaleDateString([], {weekday: "long", month: "short", day: "numeric"});
-  const days = [...Array(7)].map((_, i) => ymd(addDays(start, i)));
-  const byDay = Object.fromEntries(days.map(d => [d, r.meals.filter(x => x.day === d)]));
-  const tot = (list, k) => list.reduce((s, x) => s + (x[k] || 0) * x.servings, 0);
-  const bar = (v, goal) => goal ? `<div class="bar ${v > goal * 1.05 ? "over" : ""}"><i style="width:${Math.min(100, v / goal * 100)}%"></i></div>` : "";
-  const weekAll = r.meals;
-  const avg = k => weekAll.length ? tot(weekAll, k) / new Set(weekAll.map(x => x.day)).size : 0;
-  const dayCard = d => {
-    const list = byDay[d], cal = tot(list, "calories"), pro = tot(list, "protein_g");
-    return `<div class="card day ${d === today ? "today" : ""}">
-      <div class="day-head"><span class="d">${d === today ? "Today · " : ""}${fmtDay(parseYmd(d))}</span>
-        <span class="sum">${num(cal)}${g.calories ? " / " + num(g.calories) : ""} cal · ${num(pro)}${g.protein_g ? " / " + num(g.protein_g) : ""} g protein</span></div>
-      ${g.calories || g.protein_g ? `<div class="bars"><div>Calories${bar(cal, g.calories)}</div><div>Protein${bar(pro, g.protein_g)}</div></div>` : ""}
-      ${MEAL_SLOTS.map(s => {
-        const items = list.filter(x => x.slot === s);
-        return `<div class="slot"><div class="sl">${SLOT_NAMES[s]}</div>${items.map(x => `<div class="meal ${x.eaten ? "eaten" : ""}">
-            <input type="checkbox" data-eat="${x.id}" ${x.eaten ? "checked" : ""} aria-label="Eaten" title="Eaten">
-            <div class="mn">${esc(x.name)}${x.servings !== 1 ? ` <span class="hint">× ${x.servings}</span>` : ""}</div>
-            <div class="mv">${num(x.calories * x.servings)} cal<br>${num(x.protein_g * x.servings)} g protein</div>
-            <button type="button" data-delmeal="${x.id}" aria-label="Remove ${esc(x.name)}" title="Remove">✕</button></div>`).join("")}
-          <button type="button" class="linkbtn add-slot" data-addmeal="${d}|${s}">＋ Add</button></div>`;
-      }).join("")}</div>`;
-  };
-  $("#main").innerHTML = `<div class="card">
-      <div class="snap-title">🍽 Meal plan</div>
-      <div class="hint">Plan the week, check meals off as you eat them. Snap a photo of your food to fill in calories and protein for you.</div>
-      <div class="week-nav">
-        <button type="button" id="wkPrev" aria-label="Previous week">‹</button>
-        <span class="wk">${start.toLocaleDateString([], {month: "short", day: "numeric"})} – ${addDays(start, 6).toLocaleDateString([], {month: "short", day: "numeric"})}</span>
-        <button type="button" id="wkNext" aria-label="Next week">›</button>
-        ${m.start !== ymd(weekStart(new Date())) ? '<button type="button" id="wkNow">This week</button>' : ""}
-        <button type="button" class="primary" id="mealSnap" style="margin-left:auto">📷 Snap food</button>
-      </div>
-      ${weekAll.length ? `<div class="tiles" style="margin-top:12px">
-        <div class="tile"><div class="k">Avg calories / day</div><div class="v">${num(avg("calories"))}</div><div class="s">on days with meals</div></div>
-        <div class="tile"><div class="k">Avg protein / day</div><div class="v">${num(avg("protein_g"))} g</div></div></div>` : ""}
-      <details style="margin-top:12px" ${fresh ? "" : (m.goalsOpen ? "open" : "")} id="goalsBox"><summary>Daily goals</summary>
-        <form id="goalsForm" class="form-row">
-          <div><label>Calories / day</label><input name="calories" type="number" min="1" max="20000" inputmode="numeric" placeholder="2200" value="${esc(g.calories ?? "")}"></div>
-          <div><label>Protein / day (g)</label><input name="protein_g" type="number" min="1" max="1000" inputmode="numeric" placeholder="150" value="${esc(g.protein_g ?? "")}"></div>
-          <div><button type="submit">Save goals</button></div>
-        </form></details>
-      <form id="mealForm" class="form-row" hidden>
-        <div style="grid-column:1/-1"><b id="mealFormTitle">Add a meal</b></div>
-        <div><label>Name</label><input name="mname" maxlength="120" required placeholder="Chicken & rice"></div>
-        <div><label>Day</label><input name="day" type="date" required></div>
-        <div><label>Meal</label><select name="slot">${MEAL_SLOTS.map(s => `<option value="${s}">${SLOT_NAMES[s]}</option>`).join("")}</select></div>
-        <div><label>Calories</label><input name="calories" type="number" min="0" max="10000" required inputmode="numeric"></div>
-        <div><label>Protein (g)</label><input name="protein_g" type="number" min="0" max="1000" step="any" inputmode="decimal" value="0"></div>
-        <div><label>Servings</label><input name="servings" type="number" min="0.25" max="20" step="0.25" value="1" inputmode="decimal"></div>
-        <div style="display:flex;gap:6px"><button class="primary" type="submit">Add</button><button type="button" id="mealCancel">Cancel</button></div>
-      </form>
-    </div>
-    ${days.map(dayCard).join("")}`;
-  linkLabels($("#main"));
-  const go = n => { m.start = ymd(addDays(start, n)); renderMeals(); };
-  $("#wkPrev").onclick = () => go(-7); $("#wkNext").onclick = () => go(7);
-  if ($("#wkNow")) $("#wkNow").onclick = () => { m.start = ymd(weekStart(new Date())); renderMeals(); };
-  $("#mealSnap").onclick = () => { state.snap.mode = "food"; state.snap.result = null; state.snap.photo = null; showView("snap"); };
-  $("#goalsBox").ontoggle = e => m.goalsOpen = e.target.open;
-  $("#goalsForm").onsubmit = async e => {
-    e.preventDefault();
-    const f = e.target, v = x => Number(x.value) > 0 ? Number(x.value) : null;
-    try { await api("/api/meal-goals", {method: "PUT", body: JSON.stringify({calories: v(f.calories), protein_g: v(f.protein_g)})}); toast("Goals saved"); renderMeals(); }
-    catch (err) { alert(err.message); }
-  };
-  const mf = $("#mealForm");
-  $("#mealCancel").onclick = () => { mf.hidden = true; };
-  $("#main").querySelectorAll("[data-addmeal]").forEach(b => b.onclick = () => {
-    const [d, s] = b.dataset.addmeal.split("|");
-    mf.reset(); mf.day.value = d; mf.slot.value = s; mf.hidden = false;
-    mf.scrollIntoView({behavior: "smooth", block: "center"}); mf.mname.focus({preventScroll: true});
-  });
-  mf.onsubmit = async e => {
-    e.preventDefault();
-    try {
-      await api("/api/meals", {method: "POST", body: JSON.stringify({name: mf.mname.value, day: mf.day.value, slot: mf.slot.value,
-        calories: Number(mf.calories.value), protein_g: Number(mf.protein_g.value) || 0, servings: Number(mf.servings.value) || 1})});
-      renderMeals();
-    } catch (err) { alert(err.message); }
-  };
-  const find = id => r.meals.find(x => x.id === +id);
-  $("#main").querySelectorAll("[data-eat]").forEach(c => c.onchange = async () => {
-    const x = find(c.dataset.eat);
-    try { await api(`/api/meals/${x.id}`, {method: "PUT", body: JSON.stringify({...x, eaten: c.checked})}); renderMeals(); }
-    catch (err) { c.checked = !c.checked; alert(err.message); }
-  });
-  $("#main").querySelectorAll("[data-delmeal]").forEach(b => b.onclick = async () => {
-    const x = find(b.dataset.delmeal);
-    try {
-      await api(`/api/meals/${x.id}`, {method: "DELETE"});
-      renderMeals();
-      const {id, ...back} = x;
-      toast(`Removed ${esc(x.name)}.`, async () => { await api("/api/meals", {method: "POST", body: JSON.stringify(back)}); renderMeals(); });
-    } catch (err) { alert(err.message); }
-  });
-}
-
 const EMPTY_MAIN = `<div class="card welcome">
   <h2>👋 Start your first watch</h2>
   <ol>
@@ -1040,7 +700,6 @@ const EMPTY_MAIN = `<div class="card welcome">
 </div>`;
 document.addEventListener("click", e => {
   if (e.target.closest("[data-goto-browse]")) { showView("browse"); return; }
-  if (e.target.closest("[data-goto-meals]")) { showView("meals"); return; }
   const q = e.target.closest("[data-example]")?.dataset.example;
   if (!q) return;
   const f = $("#f"); f.query.value = q; f.max_price.focus();
@@ -1053,7 +712,6 @@ async function refresh() {
   if (!state.watches.some(w => w.id === state.sel)) { state.sel = state.watches[0]?.id ?? null; state.site = ""; }
   renderWatches();
   if (state.view === "browse") await renderBrowse();
-  else if (state.view === "snap" || state.view === "meals") return;   // nothing there changes by itself; don't wipe a half-filled form
   else if (state.sel) await renderMain();
   else $("#main").innerHTML = EMPTY_MAIN;
 }
@@ -1438,8 +1096,7 @@ $("#authForm").addEventListener("submit", async e => {
 $("#logoutBtn").onclick = async () => {
   await api("/api/auth/logout", {method: "POST"}).catch(() => {});
   state = {...state, watches: [], sel: null, me: null, lastAlert: null, site: "", showMine: false, showHidden: false,
-    view: "watches", b: {category: "", source: "", q: "", max: "", sort: "new"}, browseItems: [],
-    snap: {mode: "item", photo: null, result: null, busy: false}, meals: {start: null, data: null}};
+    view: "watches", b: {category: "", source: "", q: "", max: "", sort: "new"}, browseItems: []};
   syncTabs();
   try { history.replaceState({view: "watches"}, ""); } catch {}
   $("#main").innerHTML = EMPTY_MAIN; $("#watches").innerHTML = '<div class="empty">Nothing yet.</div>';
@@ -1542,10 +1199,7 @@ async function boot() {
   $("#who").textContent = state.me.email;
   state.sources = (await api("/api/sources")).filter(s => s.enabled);
   $("#srcs").innerHTML = state.sources.map(s => `<label><input type="checkbox" value="${s.key}" checked> ${esc(s.name)}</label>`).join("");
-  if (!state.booted && startView !== "watches") {     // reloaded while on another tab
-    state.view = startView; syncTabs();
-    if (startView === "snap") renderSnap(); else if (startView === "meals") renderMeals(true);
-  }
+  if (!state.booted && startView === "browse") { state.view = "browse"; syncTabs(); }   // reloaded while on Browse
   state.booted = true;
   loadStatus(); refresh(); pollAlerts();
   state.timers.push(setInterval(pollAlerts, 20000));

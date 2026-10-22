@@ -10,7 +10,7 @@ import secrets
 import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import budget, maintenance, scoring, vision
+from . import budget, maintenance, scoring
 from .browse import Browser, filter_items
 from .browse import iso as browse_iso
 from .alerts import valid_discord_webhook, valid_ntfy_topic
@@ -39,7 +39,6 @@ COOKIE = "sniper_session"
 
 
 WatchId = Annotated[int, PathParam(ge=1, le=2**62)]   # huge ids would overflow SQLite
-MealId = WatchId
 
 
 class WatchIn(BaseModel):
@@ -117,50 +116,6 @@ class DeleteMeIn(BaseModel):
 class ResetIn(BaseModel):
     token: str = Field(min_length=10, max_length=200)
     password: str = Field(min_length=8, max_length=200)
-
-
-class SnapIn(BaseModel):
-    image: str = Field(min_length=1, max_length=8_000_000)      # base64 (5 MB photo -> ~6.7 MB of text)
-    media_type: str = "image/jpeg"
-    mode: str = "item"                                          # "item" or "food"
-
-
-MEAL_SLOTS = ("breakfast", "lunch", "dinner", "snack")
-
-
-class MealIn(BaseModel):
-    day: date
-    slot: str = "dinner"
-    name: str = Field(min_length=1, max_length=120)
-    servings: float = Field(1, gt=0, le=20)
-    calories: float = Field(ge=0, le=10_000)                    # per serving
-    protein_g: float = Field(0, ge=0, le=1_000)
-    carbs_g: Optional[float] = Field(None, ge=0, le=2_000)
-    fat_g: Optional[float] = Field(None, ge=0, le=1_000)
-    eaten: bool = False
-
-    @field_validator("name")
-    @classmethod
-    def _clean_name(cls, v: str) -> str:
-        v = " ".join(v.split())
-        if not v:
-            raise ValueError("give the meal a name")
-        return v
-
-    @field_validator("slot")
-    @classmethod
-    def _slot(cls, v: str) -> str:
-        if v not in MEAL_SLOTS:
-            raise ValueError("slot must be breakfast, lunch, dinner or snack")
-        return v
-
-    def row(self) -> dict:
-        return {**self.model_dump(), "day": self.day.isoformat()}
-
-
-class GoalsIn(BaseModel):
-    calories: Optional[float] = Field(None, gt=0, le=20_000)
-    protein_g: Optional[float] = Field(None, gt=0, le=1_000)
 
 
 class SettingsIn(BaseModel):
@@ -588,57 +543,6 @@ def build_app(db: DB | None = None, watcher: Watcher | None = None, background: 
         return {"items": shown[:300], "total": len(shown), "categories": counts,
                 "sources": sorted({i["source"] for i in items}), "updated_at": browse_iso(at),
                 "demo": not browser.live, "note": note}
-
-    # --- 📷 Snap: what is this / where is it cheapest / what's in this food --------------
-    @app.post("/api/snap")
-    async def snap(body: SnapIn, user: User = Depends(current_user)):
-        if body.mode not in ("item", "food"):
-            raise HTTPException(422, "mode must be item or food")
-        try:
-            raw = vision.decode_image(body.image, body.media_type)
-        except ValueError as e:
-            raise HTTPException(422, str(e))
-        live = vision.configured()
-        counter = f"vision:{user.id}"
-        if live and db.usage_today(counter) >= vision.daily_limit():
-            raise HTTPException(429, f"That's today's {vision.daily_limit()} photos. More tomorrow!")
-        try:
-            result = await vision.analyze(raw, body.media_type, body.mode)
-        except vision.VisionError as e:
-            raise HTTPException(502, str(e))
-        if live:
-            db.add_usage(counter, 1)
-        return result
-
-    # --- 🍽 Meal planner ----------------------------------------------------------
-    @app.get("/api/meals")
-    def list_meals(start: date, days: int = Query(7, ge=1, le=62), user: User = Depends(current_user)):
-        end = start + timedelta(days=days - 1)
-        return {"meals": db.list_meals(user.id, start.isoformat(), end.isoformat()),
-                "goals": db.meal_goals(user.id)}
-
-    @app.post("/api/meals")
-    def add_meal(body: MealIn, user: User = Depends(current_user)):
-        if db.count_meals(user.id) >= 5000:
-            raise HTTPException(429, "meal plan is full; delete some old meals first")
-        return {"id": db.add_meal(user.id, body.row())}
-
-    @app.put("/api/meals/{mid}")
-    def update_meal(mid: MealId, body: MealIn, user: User = Depends(current_user)):
-        if not db.update_meal(user.id, mid, body.row()):
-            raise HTTPException(404, "meal not found")
-        return {"ok": True}
-
-    @app.delete("/api/meals/{mid}")
-    def delete_meal(mid: MealId, user: User = Depends(current_user)):
-        if not db.delete_meal(user.id, mid):
-            raise HTTPException(404, "meal not found")
-        return {"ok": True}
-
-    @app.put("/api/meal-goals")
-    def set_goals(body: GoalsIn, user: User = Depends(current_user)):
-        db.set_meal_goals(user.id, body.model_dump())
-        return body.model_dump()
 
     @app.get("/api/alerts")
     def alerts(since_id: int = Query(0, ge=0, le=2**62), user: User = Depends(current_user)):

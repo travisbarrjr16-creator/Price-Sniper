@@ -3,7 +3,7 @@ name = "price-sniper"
 version = "0.1.0"
 description = "Watch multiple marketplaces for an item and surface the cheapest real options."
 requires-python = ">=3.10"
-dependencies = ["fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27", "cryptography>=42", "tzdata>=2024.1", "anthropic>=2.1"]
+dependencies = ["fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27", "cryptography>=42", "tzdata>=2024.1"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
